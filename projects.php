@@ -1,0 +1,1017 @@
+<?php
+session_start();
+
+if (!isset($_SESSION["user_id"])) {
+    header("Location: login.php");
+    exit;
+}
+
+$displayName = trim(
+    $_SESSION["user_name"]
+    ?? $_SESSION["full_name"]
+    ?? $_SESSION["user_email"]
+    ?? $_SESSION["email"]
+    ?? "User"
+);
+
+if ($displayName === "") {
+    $displayName = "User";
+}
+
+$avatarText = strtoupper(substr($displayName, 0, 2));
+
+function projectsEscape($value) {
+    return htmlspecialchars((string)$value, ENT_QUOTES, "UTF-8");
+}
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DocuBiz - Projects</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background-color: #d8dcdb;
+      color: #333;
+      min-height: 100vh;
+    }
+
+    .app-layout {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      background-color: #122b49;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      color: #ffffff;
+    }
+
+    .brand-container {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      width: 200px;
+    }
+
+    .hamburger-btn {
+      background: none;
+      border: none;
+      color: #ffffff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+    }
+
+    .brand-name {
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+    }
+
+    .search-bar {
+      position: relative;
+      width: 450px;
+      display: flex;
+      align-items: center;
+    }
+
+    .search-bar input {
+      width: 100%;
+      padding: 8px 45px 8px 16px;
+      border-radius: 20px;
+      border: none;
+      outline: none;
+      background-color: #ffffff;
+      font-size: 0.85rem;
+      color: #2d3748;
+    }
+
+    .search-bar input::placeholder {
+      color: #8fa0b5;
+    }
+
+    .search-btn {
+      position: absolute;
+      right: 12px;
+      background: none;
+      border: none;
+      color: #122b49;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .icon-btn {
+      background: none;
+      border: none;
+      color: #ffffff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      opacity: 0.9;
+    }
+
+    .icon-btn:hover {
+      opacity: 1;
+    }
+
+    .user-profile {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-left: 10px;
+    }
+
+    .profile-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background-color: #2b5585;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .profile-info {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.2;
+    }
+
+    .user-name {
+      font-size: 0.82rem;
+      font-weight: 500;
+    }
+
+    .user-role {
+      font-size: 0.72rem;
+      color: #9bb3d1;
+    }
+
+    .main-body {
+      display: flex;
+      flex: 1;
+    }
+
+    .sidebar {
+      width: 210px;
+      background-color: #122b49;
+      padding-top: 15px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .sidebar-menu {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      color: #b0c4de;
+      text-decoration: none;
+      font-size: 0.88rem;
+      transition: all 0.2s ease;
+    }
+
+    .menu-item:hover {
+      color: #ffffff;
+      background-color: rgba(255, 255, 255, 0.05);
+    }
+
+    .menu-item.active {
+      color: #ffffff;
+      background-color: #274b73;
+    }
+
+    .content-area {
+      flex: 1;
+      padding: 25px 35px;
+      background-color: #d5dad9;
+    }
+
+    .page-header {
+      margin-bottom: 18px;
+    }
+
+    .page-title {
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: #2a343d;
+      line-height: 1.1;
+    }
+
+    .page-subtitle {
+      font-size: 0.82rem;
+      color: #637381;
+      margin-top: 4px;
+    }
+
+    .projects-layout {
+      display: flex;
+      gap: 20px;
+    }
+
+    .main-projects-section {
+      flex: 2.2;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .right-sidebar-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* Metric Cards Grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .metric-card {
+      background-color: #ffffff;
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    }
+
+    .metric-icon-box {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+    }
+
+    .bg-blue { background-color: #e0f2fe; color: #0284c7; }
+    .bg-green { background-color: #dcfce7; color: #16a34a; }
+    .bg-orange { background-color: #ffedd5; color: #ea580c; }
+    .bg-red { background-color: #ffe4e6; color: #e11d48; }
+
+    .metric-data {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .metric-value {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #1e293b;
+      line-height: 1;
+    }
+
+    .metric-label {
+      font-size: 0.7rem;
+      color: #64748b;
+      margin-top: 3px;
+    }
+
+    /* Projects Table Card */
+    .projects-card {
+      background-color: #ffffff;
+      border-radius: 12px;
+      padding: 18px 20px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+    }
+
+    .project-tabs {
+      display: flex;
+      gap: 25px;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 8px;
+      margin-bottom: 15px;
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #64748b;
+      cursor: pointer;
+      padding-bottom: 6px;
+    }
+
+    .tab-btn.active {
+      color: #1e293b;
+      border-bottom: 2px solid #0284c7;
+    }
+
+    .table-filter-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 15px;
+    }
+
+    .table-search-input {
+      position: relative;
+      flex: 1;
+      max-width: 320px;
+    }
+
+    .table-search-input input {
+      width: 100%;
+      padding: 6px 30px 6px 12px;
+      border: 1px solid #cbd5e0;
+      border-radius: 16px;
+      font-size: 0.78rem;
+      outline: none;
+    }
+
+    .table-search-icon {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #a0aec0;
+      display: flex;
+      align-items: center;
+    }
+
+    .filters-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .filter-select-wrapper {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .filter-label {
+      font-size: 0.58rem;
+      color: #64748b;
+      margin-bottom: 2px;
+    }
+
+    .filter-select {
+      padding: 4px 18px 4px 8px;
+      border: 1px solid #cbd5e0;
+      border-radius: 6px;
+      font-size: 0.68rem;
+      color: #334155;
+      outline: none;
+      background: #ffffff url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") no-repeat right 4px center;
+      background-size: 10px;
+      appearance: none;
+    }
+
+    /* Table Styles */
+    .projects-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    .projects-table th {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #475569;
+      padding: 10px 8px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .projects-table td {
+      padding: 10px 8px;
+      font-size: 0.78rem;
+      color: #334155;
+      vertical-align: middle;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .row-highlight {
+      background-color: #80d3ce;
+    }
+
+    .project-name-cell {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .project-title {
+      font-weight: 600;
+      font-size: 0.82rem;
+      color: #1e293b;
+    }
+
+    .project-location {
+      font-size: 0.68rem;
+      color: #94a3b8;
+    }
+
+    .event-type-badge {
+      background-color: #e9d5ff;
+      color: #6b21a8;
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      text-align: center;
+      line-height: 1.1;
+    }
+
+    .status-badge-upcoming {
+      background-color: #fde68a;
+      color: #92400e;
+      font-size: 0.68rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+
+    .progress-box {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      width: 100px;
+    }
+
+    .progress-text {
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: #475569;
+    }
+
+    .progress-bar-bg {
+      width: 100%;
+      height: 6px;
+      background-color: #e2e8f0;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background-color: #38bdf8;
+      border-radius: 3px;
+    }
+
+    /* Right Side Cards */
+    .card {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 18px 20px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 15px;
+    }
+
+    .card-header h2 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .view-all {
+      font-size: 0.75rem;
+      color: #38bdf8;
+      text-decoration: none;
+    }
+
+    .upcoming-projects-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .upcoming-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .date-badge {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #1e293b;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .date-badge .month { font-size: 0.65rem; }
+    .date-badge .day { font-size: 0.9rem; margin-top: 2px; }
+
+    .badge-purple { background-color: #d8b4fe; }
+    .badge-red { background-color: #fca5a5; }
+    .badge-green { background-color: #86efac; }
+
+    .item-details h3 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .item-details .meta {
+      font-size: 0.68rem;
+      color: #64748b;
+      margin-top: 2px;
+    }
+
+    .item-details .location {
+      font-size: 0.68rem;
+      color: #94a3b8;
+    }
+
+    /* Reminders List */
+    .reminders-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .reminder-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .reminder-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background-color: #86efac;
+      flex-shrink: 0;
+    }
+
+    .reminder-info h4 {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .reminder-info p {
+      font-size: 0.65rem;
+      color: #94a3b8;
+    }
+
+    @media (max-width: 900px) {
+      .projects-layout { flex-direction: column; }
+      .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+      .sidebar { width: 60px; }
+      .sidebar .menu-item span { display: none; }
+      .search-bar { width: 200px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-layout">
+    <header class="topbar">
+      <div class="brand-container">
+        <button class="hamburger-btn">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+        <span class="brand-name">DocuBiz</span>
+      </div>
+
+      <div class="search-bar">
+        <input type="text" placeholder="Search projects...">
+        <button type="button" class="search-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </button>
+      </div>
+
+      <div class="topbar-actions">
+        <button class="icon-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
+        <button class="icon-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+        </button>
+
+       
+        <div class="user-profile">
+          <div class="profile-avatar">
+            <?php echo projectsEscape($avatarText); ?>
+          </div>
+
+          <div class="profile-info">
+            <span class="user-name">
+              <?php echo projectsEscape($displayName); ?>
+            </span>
+            <span class="user-role">Admin Staff</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="main-body">
+
+      <aside class="sidebar">
+        <nav class="sidebar-menu">
+          <a href="dashboard.php" class="menu-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            <span>Dashboard</span>
+          </a>
+          <a href="messages.php" class="menu-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            <span>Messages</span>
+          </a>
+          <a href="calendar.php" class="menu-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            <span>Calendar</span>
+          </a>
+          <a href="projects.html" class="menu-item active">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+            <span>Projects</span>
+          </a>
+          <a href="inventory.php" class="menu-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+            <span>Inventory</span>
+          </a>
+          <a href="documents.html" class="menu-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+            <span>Documents</span>
+          </a>
+          <a href="staff_management.html" class="menu-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            <span>Staff Management</span>
+          </a>
+          <a href="finances.html" class="menu-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            <span>Finances</span>
+          </a>
+        </nav>
+      </aside>
+
+      <main class="content-area">
+        <div class="page-header">
+          <h1 class="page-title">Projects</h1>
+          <p class="page-subtitle">Plan, track, and manage all catering projects and events.</p>
+        </div>
+
+        <div class="projects-layout">
+          <div class="main-projects-section">
+            <div class="metrics-grid">
+              <div class="metric-card">
+                <div class="metric-icon-box bg-blue">📁</div>
+                <div class="metric-data">
+                  <span class="metric-value">12</span>
+                  <span class="metric-label">Total Projects</span>
+                </div>
+              </div>
+
+              <div class="metric-card">
+                <div class="metric-icon-box bg-green">✔</div>
+                <div class="metric-data">
+                  <span class="metric-value">5</span>
+                  <span class="metric-label">Ongoing</span>
+                </div>
+              </div>
+
+              <div class="metric-card">
+                <div class="metric-icon-box bg-orange">🔄</div>
+                <div class="metric-data">
+                  <span class="metric-value">4</span>
+                  <span class="metric-label">Upcoming</span>
+                </div>
+              </div>
+
+              <div class="metric-card">
+                <div class="metric-icon-box bg-red">🍰</div>
+                <div class="metric-data">
+                  <span class="metric-value">3</span>
+                  <span class="metric-label">Completed</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="projects-card">
+              <div class="project-tabs">
+                <button class="tab-btn active">All Projects</button>
+                <button class="tab-btn">Ongoing</button>
+                <button class="tab-btn">Upcoming</button>
+                <button class="tab-btn">Completed</button>
+              </div>
+
+              <div class="table-filter-bar">
+                <div class="table-search-input">
+                  <input type="text" placeholder="Search projects...">
+                  <span class="table-search-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  </span>
+                </div>
+
+                <div class="filters-group">
+                  <div class="filter-select-wrapper">
+                    <span class="filter-label">Event Type</span>
+                    <select class="filter-select">
+                      <option>All</option>
+                    </select>
+                  </div>
+
+                  <div class="filter-select-wrapper">
+                    <span class="filter-label">Status</span>
+                    <select class="filter-select">
+                      <option>All</option>
+                    </select>
+                  </div>
+
+                  <div class="filter-select-wrapper">
+                    <span class="filter-label">Sort by</span>
+                    <select class="filter-select">
+                      <option>Date (Newest)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <table class="projects-table">
+                <thead>
+                  <tr>
+                    <th>Project Name</th>
+                    <th>Client</th>
+                    <th>Event Type</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th>Progress</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <div class="project-name-cell">
+                        <span class="project-title">Birthday Party</span>
+                        <span class="project-location">Location</span>
+                      </div>
+                    </td>
+                    <td>Lumbreras</td>
+                    <td><span class="event-type-badge">Catering<br>Event</span></td>
+                    <td>August 15, 2026</td>
+                    <td><span class="status-badge-upcoming">Upcoming</span></td>
+                    <td>
+                      <div class="progress-box">
+                        <span class="progress-text">80%</span>
+                        <div class="progress-bar-bg">
+                          <div class="progress-bar-fill" style="width: 80%;"></div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <tr class="row-highlight">
+                    <td>
+                      <div class="project-name-cell">
+                        <span class="project-title">Birthday Party</span>
+                        <span class="project-location">Location</span>
+                      </div>
+                    </td>
+                    <td>Lumbreras</td>
+                    <td><span class="event-type-badge">Catering<br>Event</span></td>
+                    <td>August 15, 2026</td>
+                    <td><span class="status-badge-upcoming">Upcoming</span></td>
+                    <td>
+                      <div class="progress-box">
+                        <span class="progress-text">0%</span>
+                        <div class="progress-bar-bg">
+                          <div class="progress-bar-fill" style="width: 0%;"></div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td>
+                      <div class="project-name-cell">
+                        <span class="project-title">Birthday Party</span>
+                        <span class="project-location">Location</span>
+                      </div>
+                    </td>
+                    <td>Lumbreras</td>
+                    <td><span class="event-type-badge">Catering<br>Event</span></td>
+                    <td>August 15, 2026</td>
+                    <td><span class="status-badge-upcoming">Upcoming</span></td>
+                    <td>
+                      <div class="progress-box">
+                        <span class="progress-text">0%</span>
+                        <div class="progress-bar-bg">
+                          <div class="progress-bar-fill" style="width: 0%;"></div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <tr class="row-highlight">
+                    <td>
+                      <div class="project-name-cell">
+                        <span class="project-title">Birthday Party</span>
+                        <span class="project-location">Location</span>
+                      </div>
+                    </td>
+                    <td>Lumbreras</td>
+                    <td><span class="event-type-badge">Catering<br>Event</span></td>
+                    <td>August 15, 2026</td>
+                    <td><span class="status-badge-upcoming">Upcoming</span></td>
+                    <td>
+                      <div class="progress-box">
+                        <span class="progress-text">0%</span>
+                        <div class="progress-bar-bg">
+                          <div class="progress-bar-fill" style="width: 0%;"></div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td>
+                      <div class="project-name-cell">
+                        <span class="project-title">Birthday Party</span>
+                        <span class="project-location">Location</span>
+                      </div>
+                    </td>
+                    <td>Lumbreras</td>
+                    <td><span class="event-type-badge">Catering<br>Event</span></td>
+                    <td>August 15, 2026</td>
+                    <td><span class="status-badge-upcoming">Upcoming</span></td>
+                    <td>
+                      <div class="progress-box">
+                        <span class="progress-text">0%</span>
+                        <div class="progress-bar-bg">
+                          <div class="progress-bar-fill" style="width: 0%;"></div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <tr class="row-highlight">
+                    <td>
+                      <div class="project-name-cell">
+                        <span class="project-title">Birthday Party</span>
+                        <span class="project-location">Location</span>
+                      </div>
+                    </td>
+                    <td>Lumbreras</td>
+                    <td><span class="event-type-badge">Catering<br>Event</span></td>
+                    <td>August 15, 2026</td>
+                    <td><span class="status-badge-upcoming">Upcoming</span></td>
+                    <td>
+                      <div class="progress-box">
+                        <span class="progress-text">0%</span>
+                        <div class="progress-bar-bg">
+                          <div class="progress-bar-fill" style="width: 0%;"></div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="right-sidebar-section">
+            <div class="card">
+              <div class="card-header">
+                <h2>Upcoming Projects</h2>
+                <a href="#" class="view-all">View All</a>
+              </div>
+
+              <div class="upcoming-projects-list">
+                <div class="upcoming-item">
+                  <div class="date-badge badge-purple">
+                    <span class="month">AUG</span>
+                    <span class="day">15</span>
+                  </div>
+                  <div class="item-details">
+                    <h3>Birthday Party</h3>
+                    <div class="meta">80 Guest • 4:00 PM</div>
+                    <div class="location">Location</div>
+                  </div>
+                </div>
+
+                <div class="upcoming-item">
+                  <div class="date-badge badge-red">
+                    <span class="month">AUG</span>
+                    <span class="day">17</span>
+                  </div>
+                  <div class="item-details">
+                    <h3>Inventory Restock</h3>
+                    <div class="meta">80 Guest • 4:00 PM</div>
+                    <div class="location">Location</div>
+                  </div>
+                </div>
+
+                <div class="upcoming-item">
+                  <div class="date-badge badge-green">
+                    <span class="month">AUG</span>
+                    <span class="day">20</span>
+                  </div>
+                  <div class="item-details">
+                    <h3>Meeting</h3>
+                    <div class="meta">80 Guest • 4:00 PM</div>
+                    <div class="location">Location</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h2>Project Reminders</h2>
+                <a href="#" class="view-all">View All</a>
+              </div>
+
+              <div class="reminders-list">
+                <div class="reminder-item">
+                  <div class="reminder-dot"></div>
+                  <div class="reminder-info">
+                    <h4>Confirm Final Menu</h4>
+                    <p>Event • Date</p>
+                  </div>
+                </div>
+
+                <div class="reminder-item">
+                  <div class="reminder-dot"></div>
+                  <div class="reminder-info">
+                    <h4>Confirm Final Menu</h4>
+                    <p>Event • Date</p>
+                  </div>
+                </div>
+
+                <div class="reminder-item">
+                  <div class="reminder-dot"></div>
+                  <div class="reminder-info">
+                    <h4>Confirm Final Menu</h4>
+                    <p>Event • Date</p>
+                  </div>
+                </div>
+
+                <div class="reminder-item">
+                  <div class="reminder-dot"></div>
+                  <div class="reminder-info">
+                    <h4>Confirm Final Menu</h4>
+                    <p>Event • Date</p>
+                  </div>
+                </div>
+
+                <div class="reminder-item">
+                  <div class="reminder-dot"></div>
+                  <div class="reminder-info">
+                    <h4>Confirm Final Menu</h4>
+                    <p>Event • Date</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+</body>
+</html>
