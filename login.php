@@ -1,4 +1,3 @@
-
 <?php
 session_start();
 
@@ -73,51 +72,76 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
   <style>
     * {
+      box-sizing: border-box;
       margin: 0;
       padding: 0;
-      box-sizing: border-box;
-      font-family: 'Poppins', sans-serif;
     }
+
     body {
-      background: linear-gradient(135deg, #0b2246 0%, #3a7bd5 100%);
-      min-height: 100vh;
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(135deg, #0052D4, #4364F7, #6FB1FC);
+      height: 100vh;
+      overflow: hidden; /* Tinanggal ang scrollbar ng buong pahina */
       display: flex;
-      align-items: center;
       justify-content: center;
+      align-items: center;
     }
+
     .container {
-      display: flex;
       width: 100%;
-      max-width: 1000px;
+      height: 100vh;
+      display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 20px;
+      padding: 0 10%;
     }
+
     .brand-section {
-      color: #ffffff;
-      font-size: 3.5rem;
-      font-weight: 700;
-      letter-spacing: -1px;
-      margin-left: 50px;
+      flex: 1;
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
     }
+
+    .brand-title {
+      font-size: 4.5rem;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -1px;
+    }
+
     .login-card {
       background: #ffffff;
-      padding: 40px;
+      padding: 28px 32px; /* Pinababa ang padding para hindi masyadong matangkad */
       border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
       width: 100%;
-      max-width: 420px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      max-width: 400px; /* Mas pinakitid nang konti */
+      margin-left: auto;
     }
+
     .login-card h2 {
       font-size: 1.5rem;
-      font-weight: 600;
+      font-weight: 700;
       color: #1a202c;
-      margin-bottom: 24px;
       text-align: center;
+      margin-bottom: 20px;
     }
+
+    .error-message {
+      background: #fed7d7;
+      color: #c53030;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      text-align: center;
+      margin-bottom: 15px;
+    }
+
     .form-group {
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
+
     .form-group label {
       display: block;
       font-size: 0.8rem;
@@ -125,114 +149,208 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       color: #4a5568;
       margin-bottom: 6px;
     }
+
     .input-wrapper {
       position: relative;
+      display: flex;
+      align-items: center;
     }
+
     .input-wrapper input {
       width: 100%;
       padding: 10px 14px;
-      border: 1px solid #cbd5e0;
+      border: 1px solid #e2e8f0;
       border-radius: 8px;
-      font-size: 0.85rem;
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.9rem;
+      color: #2d3748;
       outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
+
     .input-wrapper input:focus {
       border-color: #3182ce;
+      box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
     }
+
+    .input-wrapper input::placeholder {
+      color: #a0aec0;
+    }
+
     .eye-toggle {
       position: absolute;
       right: 12px;
-      top: 50%;
-      transform: translateY(-50%);
       background: none;
       border: none;
       cursor: pointer;
       color: #a0aec0;
       display: flex;
       align-items: center;
+      padding: 0;
     }
+
+    .eye-toggle:hover {
+      color: #4a5568;
+    }
+
     .forgot-link-wrapper {
       text-align: right;
       margin-top: 6px;
     }
+
     .forgot-link {
       font-size: 0.75rem;
-      color: #a0aec0;
+      color: #2563eb;
       text-decoration: none;
     }
+
+    .forgot-link:hover {
+      text-decoration: underline;
+    }
+
     .btn-submit {
       width: 100%;
-      padding: 11px;
-      background-color: #122b49;
+      padding: 10px;
+      background: #111827;
       color: #ffffff;
       border: none;
       border-radius: 8px;
+      font-family: 'Poppins', sans-serif;
       font-size: 0.9rem;
       font-weight: 600;
       cursor: pointer;
-      margin-top: 10px;
+      transition: background 0.2s;
+      margin-top: 8px;
     }
+
+    .btn-submit:hover {
+      background: #1f2937;
+    }
+
     .divider {
       text-align: center;
-      font-size: 0.75rem;
-      color: #a0aec0;
-      margin: 16px 0;
+      margin: 14px 0;
+      font-size: 0.8rem;
+      color: #9ca3af;
       position: relative;
     }
+
+    .divider::before, .divider::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      width: 42%;
+      height: 1px;
+      background: #e5e7eb;
+    }
+
+    .divider::before { left: 0; }
+    .divider::after { right: 0; }
+
     .btn-google {
       width: 100%;
       padding: 10px;
-      background-color: #ffffff;
-      border: 1px solid #cbd5e0;
+      background: #ffffff;
+      color: #374151;
+      border: 1px solid #d1d5db;
       border-radius: 8px;
+      font-family: 'Poppins', sans-serif;
       font-size: 0.85rem;
       font-weight: 500;
-      color: #2d3748;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
-      margin-bottom: 10px;
+      transition: background 0.2s;
     }
+
+    .btn-google:hover {
+      background: #f9fafb;
+    }
+
+    .google-icon {
+      width: 16px;
+      height: 16px;
+    }
+
     .btn-admin {
       width: 100%;
+      margin-top: 8px;
       padding: 10px;
-      background-color: #ffffff;
-      border: 1px solid #cbd5e0;
+      background: #ffffff;
+      border: 1px solid #d1d5db;
       border-radius: 8px;
+      font-family: 'Poppins', sans-serif;
       font-size: 0.85rem;
-      font-weight: 500;
-      color: #2d3748;
+      color: #374151;
       cursor: pointer;
+      font-weight: 500;
       text-decoration: none;
       display: block;
       text-align: center;
+      transition: background 0.2s;
     }
-    .google-icon {
-      width: 18px;
-      height: 18px;
+
+    .btn-admin:hover {
+      background: #f9fafb;
     }
+
     .signup-prompt {
       text-align: center;
-      font-size: 0.78rem;
-      color: #718096;
-      margin-top: 20px;
+      margin-top: 16px;
+      font-size: 0.8rem;
+      color: #6b7280;
     }
+
     .signup-prompt a {
-      color: #3182ce;
+      color: #2563eb;
       text-decoration: none;
-      font-weight: 600;
+      font-weight: 500;
+    }
+
+    .signup-prompt a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 900px) {
+      body {
+        overflow: auto;
+      }
+      .container {
+        flex-direction: column;
+        justify-content: center;
+        padding: 20px;
+        height: auto;
+      }
+      .brand-section {
+        margin-bottom: 20px;
+        text-align: center;
+        justify-content: center;
+      }
+      .brand-title {
+        font-size: 3rem;
+      }
+      .login-card {
+        margin-left: 0;
+      }
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="brand-section">
-      DocuBiz
+      <div class="brand-logo">
+        <span class="brand-title">DocuBiz</span>
+      </div>
     </div>
     <div class="login-card">
       <h2>Log In</h2>
+
+      <?php if (!empty($loginError)): ?>
+        <div class="error-message"><?php echo htmlspecialchars($loginError); ?></div>
+      <?php endif; ?>
+
       <form action="login.php" method="POST">
         <div class="form-group">
           <label for="email">Email or phone</label>
@@ -244,8 +362,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <label for="password">Password</label>
           <div class="input-wrapper">
             <input type="password" id="password" name="password" placeholder="••••••••" required>
-            <button type="button" class="eye-toggle" title="Toggle password">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+            <button type="button" class="eye-toggle" title="Toggle password visibility">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+              </svg>
             </button>
           </div>
           <div class="forgot-link-wrapper">

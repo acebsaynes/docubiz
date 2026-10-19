@@ -2,13 +2,125 @@
 <?php
 session_start();
 
-// Protect the dashboard: only logged-in users can access it.
 if (!isset($_SESSION["user_id"])) {
     header("Location: login.php");
     exit;
 }
 
-// Get the logged-in user's name from the session set by login.php.
+require_once "db.php";
+
+$userId = (int) $_SESSION["user_id"];
+$taskMessage = "";
+
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $action = $_POST["task_action"] ?? "";
+
+    if ($action === "add_task") {
+        $taskTitle = trim($_POST["task_title"] ?? "");
+        $deadline = trim($_POST["deadline"] ?? "");
+
+        $dateObject = DateTime::createFromFormat("!Y-m-d", $deadline);
+        $validDate = $dateObject && $dateObject->format("Y-m-d") === $deadline;
+
+        if ($taskTitle === "" || strlen($taskTitle) > 255 || !$validDate) {
+            $_SESSION["task_message"] = "Please enter a valid task title and deadline.";
+        } else {
+            $stmt = $conn->prepare(
+                "INSERT INTO tasks (user_id, task_title, deadline)
+                 VALUES (?, ?, ?)"
+            );
+
+            if ($stmt) {
+                $stmt->bind_param("iss", $userId, $taskTitle, $deadline);
+
+                if ($stmt->execute()) {
+                    $_SESSION["task_message"] = "Task added successfully!";
+                } else {
+                    $_SESSION["task_message"] = "Unable to save the task. Please try again.";
+                }
+
+                $stmt->close();
+            } else {
+                $_SESSION["task_message"] = "Unable to save the task. Please check your database.";
+            }
+        }
+
+        header("Location: dashboard.php");
+        exit;
+    }
+
+    if ($action === "delete_task") {
+        $taskId = (int) ($_POST["task_id"] ?? 0);
+
+        if ($taskId > 0) {
+            $stmt = $conn->prepare(
+                "DELETE FROM tasks WHERE id = ? AND user_id = ?"
+            );
+
+            if ($stmt) {
+                $stmt->bind_param("ii", $taskId, $userId);
+                $stmt->execute();
+
+                $_SESSION["task_message"] = $stmt->affected_rows > 0
+                    ? "Task deleted successfully!"
+                    : "Task could not be found.";
+
+                $stmt->close();
+            }
+        }
+
+        header("Location: dashboard.php");
+        exit;
+    }
+}
+
+// One-time message after adding or deleting a task.
+if (isset($_SESSION["task_message"])) {
+    $taskMessage = $_SESSION["task_message"];
+    unset($_SESSION["task_message"]);
+}
+
+// Get the logged-in user's tasks.
+$userTasks = [];
+
+$stmt = $conn->prepare(
+    "SELECT id, task_title, deadline
+     FROM tasks
+     WHERE user_id = ?
+     ORDER BY deadline ASC, id DESC"
+);
+
+if ($stmt) {
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $tasksResult = $stmt->get_result();
+
+    while ($task = $tasksResult->fetch_assoc()) {
+        $userTasks[] = $task;
+    }
+
+    $stmt->close();
+}
+
+// Get upcoming events from the database.
+$upcomingEvents = [];
+
+$sql = "SELECT event_name, event_date, start_time, event_type,
+               location, description, notes
+        FROM events
+        WHERE event_date >= CURDATE()
+        ORDER BY event_date ASC, start_time ASC
+        LIMIT 5";
+
+$eventsResult = $conn->query($sql);
+
+if ($eventsResult) {
+    while ($event = $eventsResult->fetch_assoc()) {
+        $upcomingEvents[] = $event;
+    }
+}
+
+// Get logged-in user's display name.
 $displayName = trim($_SESSION["user_name"] ?? "");
 
 if ($displayName === "") {
@@ -23,7 +135,7 @@ if ($displayName === "") {
     $displayName = "User";
 }
 
-// Generate avatar initials from the displayed name.
+// Generate avatar initials.
 $nameParts = preg_split('/\s+/', $displayName);
 $avatarText = "";
 
@@ -466,17 +578,118 @@ if (count($nameParts) >= 2) {
     .task-item {
       display: flex;
       flex-direction: column;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #edf2f7;
+    }
+
+    .task-item:last-child {
+      padding-bottom: 0;
+      border-bottom: none;
     }
 
     .task-title {
       font-size: 0.88rem;
       font-weight: 600;
       color: #2d3748;
+      overflow-wrap: anywhere;
     }
 
     .task-deadline {
       font-size: 0.72rem;
       color: #a0aec0;
+    }
+
+    .task-add-form {
+      display: none;
+      margin-bottom: 18px;
+      padding: 14px;
+      background: #f7fafc;
+      border: 1px solid #edf2f7;
+      border-radius: 10px;
+    }
+
+    .task-add-form.show {
+      display: block;
+    }
+
+    .task-add-form label {
+      display: block;
+      margin-bottom: 5px;
+      color: #4a5568;
+      font-size: 0.78rem;
+      font-weight: 500;
+    }
+
+    .task-add-form input {
+      width: 100%;
+      padding: 9px 10px;
+      margin-bottom: 12px;
+      border: 1px solid #cbd5e0;
+      border-radius: 6px;
+      outline: none;
+      font-size: 0.8rem;
+      background: #ffffff;
+    }
+
+    .task-add-form input:focus {
+      border-color: #319795;
+    }
+
+    .task-form-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .task-save-btn,
+    .task-cancel-btn {
+      padding: 7px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.76rem;
+    }
+
+    .task-save-btn {
+      background: #122b49;
+      color: #ffffff;
+    }
+
+    .task-cancel-btn {
+      background: #e2e8f0;
+      color: #2d3748;
+    }
+
+    .task-message {
+      margin-bottom: 14px;
+      color: #2f855a;
+      font-size: 0.78rem;
+    }
+
+    .task-item-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .task-delete-btn {
+      flex-shrink: 0;
+      padding: 3px 7px;
+      border: none;
+      border-radius: 5px;
+      background: #fff5f5;
+      color: #c53030;
+      cursor: pointer;
+      font-size: 0.72rem;
+    }
+
+    .task-delete-btn:hover {
+      background: #fed7d7;
+    }
+
+    .task-empty {
+      color: #a0aec0;
+      font-size: 0.8rem;
     }
 
     @media (max-width: 900px) {
@@ -518,7 +731,7 @@ if (count($nameParts) >= 2) {
 
       <div class="topbar-actions">
         <button class="icon-btn" type="button" aria-label="Settings">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0l.06.06a2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0 .33-1.82A1.65 1.65 0 0 0 3 13h-.09A2 2 0 0 1 1 11a2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 7a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V1a2 2 0 0 1 2-1 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0l.06.06a2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V8a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         </button>
         <button class="icon-btn" type="button" aria-label="Notifications">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
@@ -563,15 +776,15 @@ if (count($nameParts) >= 2) {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
             <span>Inventory</span>
           </a>
-          <a href="documents.html" class="menu-item">
+          <a href="documents.php" class="menu-item">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
             <span>Documents</span>
           </a>
-          <a href="staff_management.html" class="menu-item">
+          <a href="staff_management.php" class="menu-item">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
             <span>Staff Management</span>
           </a>
-          <a href="finances.html" class="menu-item">
+          <a href="finances.php" class="menu-item">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
             <span>Finances</span>
           </a>
@@ -598,39 +811,66 @@ if (count($nameParts) >= 2) {
             <div class="card events-card">
               <div class="card-header">
                 <h2>Upcoming Events</h2>
-                <a href="#" class="view-all">View All</a>
+                <a href="calendar.php" class="view-all">View All</a>
               </div>
 
               <div class="events-list">
-                <div class="event-item">
-                  <div class="event-top">
-                    <span class="event-date date-purple">● August 15, 2026 - 4:00 PM</span>
-                    <button class="options-btn" type="button">•••</button>
-                  </div>
-                  <h3 class="event-title">Birthday Party</h3>
-                  <p class="event-desc">Birthday party description.</p>
-                  <div class="event-meta">80 Guest - Location</div>
-                </div>
+                <?php if (!empty($upcomingEvents)): ?>
+                  <?php
+                    $eventColors = ["date-purple", "date-orange", "date-green"];
 
-                <div class="event-item">
-                  <div class="event-top">
-                    <span class="event-date date-orange">● August 17, 2026 - 4:00 PM</span>
-                    <button class="options-btn" type="button">•••</button>
-                  </div>
-                  <h3 class="event-title">Inventory Restock</h3>
-                  <p class="event-desc">Event description goes here.</p>
-                  <div class="event-meta">80 Guest - Location</div>
-                </div>
+                    foreach ($upcomingEvents as $index => $event):
+                      $eventDate = date("F j, Y", strtotime($event["event_date"]));
 
-                <div class="event-item">
-                  <div class="event-top">
-                    <span class="event-date date-green">● August 20, 2026 - 4:00 PM</span>
-                    <button class="options-btn" type="button">•••</button>
+                      $eventTime = "";
+                      if (!empty($event["start_time"])) {
+                          $eventTime = date("g:i A", strtotime($event["start_time"]));
+                      }
+
+                      $eventDescription = trim($event["description"] ?? "");
+                      if ($eventDescription === "") {
+                          $eventDescription = trim($event["event_type"] ?? "");
+                      }
+
+                      $eventLocation = trim($event["location"] ?? "");
+                      $eventColor = $eventColors[$index % count($eventColors)];
+                  ?>
+                    <div class="event-item">
+                      <div class="event-top">
+                        <span class="event-date <?= $eventColor ?>">
+                          ● <?= htmlspecialchars($eventDate, ENT_QUOTES, "UTF-8") ?>
+                          <?= $eventTime !== "" ? " - " . htmlspecialchars($eventTime, ENT_QUOTES, "UTF-8") : "" ?>
+                        </span>
+                      </div>
+
+                      <h3 class="event-title">
+                        <?= htmlspecialchars($event["event_name"], ENT_QUOTES, "UTF-8") ?>
+                      </h3>
+
+                      <p class="event-desc">
+                        <?= htmlspecialchars(
+                            $eventDescription !== "" ? $eventDescription : "No description provided.",
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ) ?>
+                      </p>
+
+                      <div class="event-meta">
+                        <?= htmlspecialchars(
+                            $eventLocation !== "" ? $eventLocation : "Location not specified",
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ) ?>
+                      </div>
+                    </div>
+                  <?php endforeach; ?>
+                <?php else: ?>
+                  <div class="event-item">
+                    <h3 class="event-title">No upcoming events</h3>
+                    <p class="event-desc">Your upcoming calendar events will appear here.</p>
+                    <div class="event-meta">Add an event through the Calendar page.</div>
                   </div>
-                  <h3 class="event-title">Meeting</h3>
-                  <p class="event-desc">Event description goes here.</p>
-                  <div class="event-meta">80 Guest - Location</div>
-                </div>
+                <?php endif; ?>
               </div>
             </div>
           </div>
@@ -641,6 +881,7 @@ if (count($nameParts) >= 2) {
                 <div class="cal-day">Monday</div>
                 <div class="cal-date">September 7, 2026</div>
               </div>
+
               <div class="calendar-grid">
                 <span class="day-label">SUN</span>
                 <span class="day-label">MON</span>
@@ -691,22 +932,96 @@ if (count($nameParts) >= 2) {
             <div class="card tasks-card">
               <div class="card-header">
                 <h2>Tasks</h2>
-                <button class="add-task-btn" type="button">+</button>
+                <button
+                  class="add-task-btn"
+                  type="button"
+                  id="addTaskButton"
+                  aria-label="Add task"
+                  aria-expanded="false"
+                >+</button>
               </div>
 
+              <form
+                method="POST"
+                action="dashboard.php"
+                class="task-add-form"
+                id="taskAddForm"
+              >
+                <input type="hidden" name="task_action" value="add_task">
+
+                <label for="taskTitle">Task title</label>
+                <input
+                  type="text"
+                  id="taskTitle"
+                  name="task_title"
+                  maxlength="255"
+                  placeholder="Enter task name"
+                  required
+                >
+
+                <label for="taskDeadline">Deadline</label>
+                <input
+                  type="date"
+                  id="taskDeadline"
+                  name="deadline"
+                  required
+                >
+
+                <div class="task-form-actions">
+                  <button type="submit" class="task-save-btn">Save Task</button>
+                  <button type="button" class="task-cancel-btn" id="cancelTaskButton">
+                    Cancel
+                  </button>
+                </div>
+              </form>
+
+              <?php if ($taskMessage !== ""): ?>
+                <p class="task-message">
+                  <?= htmlspecialchars($taskMessage, ENT_QUOTES, "UTF-8") ?>
+                </p>
+              <?php endif; ?>
+
               <div class="tasks-list">
-                <div class="task-item">
-                  <h3 class="task-title">Task 1 bla bla</h3>
-                  <span class="task-deadline">Deadline: August 10, 2026</span>
-                </div>
-                <div class="task-item">
-                  <h3 class="task-title">Task 2 bla bla</h3>
-                  <span class="task-deadline">Deadline: August 11, 2026</span>
-                </div>
-                <div class="task-item">
-                  <h3 class="task-title">Task 3 bla bla</h3>
-                  <span class="task-deadline">Deadline: August 12, 2026</span>
-                </div>
+                <?php if (!empty($userTasks)): ?>
+                  <?php foreach ($userTasks as $task): ?>
+                    <div class="task-item">
+                      <div class="task-item-row">
+                        <div>
+                          <h3 class="task-title">
+                            <?= htmlspecialchars($task["task_title"], ENT_QUOTES, "UTF-8") ?>
+                          </h3>
+
+                          <span class="task-deadline">
+                            Deadline:
+                            <?= htmlspecialchars(
+                                date("F j, Y", strtotime($task["deadline"])),
+                                ENT_QUOTES,
+                                "UTF-8"
+                            ) ?>
+                          </span>
+                        </div>
+
+                        <form
+                          method="POST"
+                          action="dashboard.php"
+                          onsubmit="return confirm('Delete this task?');"
+                        >
+                          <input type="hidden" name="task_action" value="delete_task">
+                          <input
+                            type="hidden"
+                            name="task_id"
+                            value="<?= (int) $task["id"] ?>"
+                          >
+                          <button type="submit" class="task-delete-btn">
+                            Delete
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  <?php endforeach; ?>
+                <?php else: ?>
+                  <p class="task-empty">No tasks yet. Click + to add your first task!</p>
+                <?php endif; ?>
               </div>
             </div>
           </div>
@@ -715,5 +1030,38 @@ if (count($nameParts) >= 2) {
     </div>
   </div>
 
+  <script>
+    const addTaskButton = document.getElementById("addTaskButton");
+    const taskAddForm = document.getElementById("taskAddForm");
+    const cancelTaskButton = document.getElementById("cancelTaskButton");
+    const taskTitleInput = document.getElementById("taskTitle");
+    const taskDeadlineInput = document.getElementById("taskDeadline");
+
+    addTaskButton.addEventListener("click", function () {
+      const isOpen = taskAddForm.classList.toggle("show");
+
+      addTaskButton.setAttribute("aria-expanded", String(isOpen));
+
+      if (isOpen) {
+        taskTitleInput.focus();
+      }
+    });
+
+    cancelTaskButton.addEventListener("click", function () {
+      taskAddForm.classList.remove("show");
+      addTaskButton.setAttribute("aria-expanded", "false");
+      taskAddForm.reset();
+    });
+
+
+    const today = new Date();
+    const localToday = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, "0"),
+      String(today.getDate()).padStart(2, "0")
+    ].join("-");
+
+    taskDeadlineInput.min = localToday;
+  </script>
 </body>
 </html>

@@ -7,7 +7,250 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(135deg, #0052D4, #4364F7, #6FB1FC);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .container {
+      width: 100%;
+      min-height: 100vh;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 8%;
+    }
+
+    .brand-section {
+      flex: 1;
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+    }
+
+    .brand-title {
+      font-size: 5rem;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -1px;
+    }
+
+    .login-card {
+      background: #ffffff;
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+      width: 100%;
+      max-width: 440px;
+    }
+
+    .login-card h2 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #1a202c;
+      text-align: center;
+      margin-bottom: 25px;
+    }
+
+    .form-group {
+      margin-bottom: 18px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #4a5568;
+      margin-bottom: 6px;
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .input-wrapper input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.95rem;
+      color: #2d3748;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .input-wrapper input:focus {
+      border-color: #3182ce;
+      box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
+    }
+
+    .input-wrapper input::placeholder {
+      color: #a0aec0;
+    }
+
+    .eye-toggle {
+      position: absolute;
+      right: 14px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #a0aec0;
+      display: flex;
+      align-items: center;
+      padding: 0;
+    }
+
+    .eye-toggle:hover {
+      color: #4a5568;
+    }
+
+    .forgot-link-wrapper {
+      text-align: right;
+      margin-top: 6px;
+    }
+
+    .forgot-link {
+      font-size: 0.8rem;
+      color: #2563eb;
+      text-decoration: none;
+    }
+
+    .forgot-link:hover {
+      text-decoration: underline;
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: 12px;
+      background: #111827;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 10px;
+    }
+
+    .btn-submit:hover {
+      background: #1f2937;
+    }
+
+    .divider {
+      text-align: center;
+      margin: 18px 0;
+      font-size: 0.85rem;
+      color: #9ca3af;
+      position: relative;
+    }
+
+    .divider::before, .divider::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      width: 42%;
+      height: 1px;
+      background: #e5e7eb;
+    }
+
+    .divider::before { left: 0; }
+    .divider::after { right: 0; }
+
+    .btn-google {
+      width: 100%;
+      padding: 12px;
+      background: #ffffff;
+      color: #374151;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.90rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: background 0.2s;
+    }
+
+    .btn-google:hover {
+      background: #f9fafb;
+    }
+
+    .google-icon {
+      width: 18px;
+      height: 18px;
+    }
+
+    .btn-admin {
+      width: 100%;
+      margin-top: 10px;
+      padding: 12px;
+      background: #ffffff;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.90rem;
+      color: #374151;
+      cursor: pointer;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    .btn-admin:hover {
+      background: #f9fafb;
+    }
+
+    .signup-prompt {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 0.85rem;
+      color: #6b7280;
+    }
+
+    .signup-prompt a {
+      color: #2563eb;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .signup-prompt a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 900px) {
+      .container {
+        flex-direction: column;
+        justify-content: center;
+        padding: 20px;
+      }
+      .brand-section {
+        margin-bottom: 20px;
+        text-align: center;
+        justify-content: center;
+      }
+      .brand-title {
+        font-size: 3rem;
+      }
+    }
+  </style>
 </head>
 <body>
   <div class="container">
@@ -63,7 +306,7 @@
           </svg>
           Log In with Google
         </button>
-        <button type="button" class="btn-admin" style="width: 100%; margin-top: 10px; padding: 10px; background: #ffffff; border: 1px solid #cbd5e0; border-radius: 8px; font-family: 'Poppins', sans-serif; font-size: 0.85rem; color: #2d3748; cursor: pointer; font-weight: 500;">
+        <button type="button" class="btn-admin">
           Log In as Admin
         </button>
         <p class="signup-prompt">

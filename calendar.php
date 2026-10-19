@@ -1,3 +1,4 @@
+
 <?php
 session_start();
 
@@ -8,11 +9,12 @@ if (!isset($_SESSION["user_id"])) {
 
 require_once "db.php";
 
-$success = isset($_GET["success"]);
+$success = "";
 $error = "";
 
 $month = isset($_GET["month"]) ? (int)$_GET["month"] : (int)date("n");
 $year = isset($_GET["year"]) ? (int)$_GET["year"] : (int)date("Y");
+$showAll = isset($_GET["view"]) && $_GET["view"] === "all";
 
 if ($month < 1 || $month > 12) {
     $month = (int)date("n");
@@ -44,87 +46,276 @@ if ($nextMonth > 12) {
     $nextYear++;
 }
 
-/* SAVE EVENT */
-if (
-    $_SERVER["REQUEST_METHOD"] === "POST" &&
-    ($_POST["form_action"] ?? "") === "add_event"
-) {
-    $eventName = trim($_POST["event_name"] ?? "");
-    $eventDate = trim($_POST["event_date"] ?? "");
-    $startTime = trim($_POST["start_time"] ?? "");
-    $endTime = trim($_POST["end_time"] ?? "");
-    $eventType = trim($_POST["event_type"] ?? "other");
-    $location = trim($_POST["location"] ?? "");
-    $description = trim($_POST["description"] ?? "");
-    $assignedStaff = trim($_POST["assigned_staff"] ?? "");
-    $notes = trim($_POST["notes"] ?? "");
+/* HELPER FUNCTIONS */
 
-    $allowedTypes = ["catering", "inventory", "meeting", "other"];
+function calendarEscape($value) {
+    return htmlspecialchars((string)$value, ENT_QUOTES, "UTF-8");
+}
 
-    if ($eventName === "" || $eventDate === "" || $startTime === "") {
-        $error = "Please fill in the event name, date, and start time.";
-    } elseif (!in_array($eventType, $allowedTypes, true)) {
-        $error = "Please select a valid event type.";
-    } elseif (
-        !preg_match('/^\d{4}-\d{2}-\d{2}$/', $eventDate) ||
-        !checkdate(
-            (int)substr($eventDate, 5, 2),
-            (int)substr($eventDate, 8, 2),
-            (int)substr($eventDate, 0, 4)
-        )
-    ) {
-        $error = "Please select a valid event date.";
-    } elseif (
-        $endTime !== "" &&
-        strtotime($endTime) < strtotime($startTime)
-    ) {
-        $error = "End time cannot be earlier than start time.";
-    } else {
-        $endTimeValue = ($endTime === "") ? null : $endTime;
+function eventBadgeClass($type) {
+    $classes = [
+        "catering" => "badge-catering",
+        "inventory" => "badge-inventory",
+        "meeting" => "badge-meeting",
+        "other" => "badge-other"
+    ];
 
-        $stmt = $conn->prepare(
-            "INSERT INTO events
-            (event_name, event_date, start_time, end_time, event_type,
-             location, description, assigned_staff, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    return $classes[$type] ?? "badge-other";
+}
+
+function eventTypeLabel($type) {
+    $labels = [
+        "catering" => "Catering Event",
+        "inventory" => "Inventory Restock",
+        "meeting" => "Meeting",
+        "other" => "Other"
+    ];
+
+    return $labels[$type] ?? "Other";
+}
+
+function validEventDate($date) {
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+        return false;
+    }
+
+    return checkdate(
+        (int)substr($date, 5, 2),
+        (int)substr($date, 8, 2),
+        (int)substr($date, 0, 4)
+    );
+}
+
+function calendarRedirect($month, $year, $view = "") {
+    $url = "calendar.php?month=" . (int)$month .
+           "&year=" . (int)$year;
+
+    if ($view === "all") {
+        $url .= "&view=all";
+    }
+
+    header("Location: " . $url);
+    exit;
+}
+
+/* FORM DEFAULTS */
+
+$formAction = "add_event";
+$editingEventId = "";
+$formValues = [
+    "event_name" => "",
+    "event_date" => "",
+    "start_time" => "",
+    "end_time" => "",
+    "event_type" => "catering",
+    "location" => "",
+    "description" => "",
+    "assigned_staff" => "",
+    "notes" => ""
+];
+
+/* HANDLE FORM SUBMISSIONS */
+
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $action = $_POST["form_action"] ?? "";
+
+    /* DELETE EVENT */
+
+    if ($action === "delete_event") {
+        $eventId = filter_var(
+            $_POST["event_id"] ?? "",
+            FILTER_VALIDATE_INT
         );
 
-        if ($stmt) {
-            $stmt->bind_param(
-                "sssssssss",
-                $eventName,
-                $eventDate,
-                $startTime,
-                $endTimeValue,
-                $eventType,
-                $location,
-                $description,
-                $assignedStaff,
-                $notes
+        if (!$eventId || $eventId < 1) {
+            $error = "Invalid event selected.";
+        } else {
+            $stmt = $conn->prepare(
+                "DELETE FROM events WHERE id = ?"
             );
 
-            if ($stmt->execute()) {
-                $stmt->close();
+            if ($stmt) {
+                $stmt->bind_param("i", $eventId);
 
-                header(
-                    "Location: calendar.php?month=" .
-                    (int)date("n", strtotime($eventDate)) .
-                    "&year=" .
-                    (int)date("Y", strtotime($eventDate)) .
-                    "&success=1"
-                );
-                exit;
+                if ($stmt->execute()) {
+                    $deleted = $stmt->affected_rows;
+                    $stmt->close();
+
+                    if ($deleted > 0) {
+                        calendarRedirect($month, $year, "all");
+                    } else {
+                        $error = "Event not found. It may have already been deleted.";
+                    }
+                } else {
+                    $stmt->close();
+                    $error = "Unable to delete the event. Please try again.";
+                }
+            } else {
+                $error = "Unable to prepare the delete request.";
             }
+        }
+    }
 
-            $stmt->close();
-            $error = "Unable to save the event. Please try again.";
+    /* ADD OR UPDATE EVENT */
+
+    if ($action === "add_event" || $action === "update_event") {
+        $formAction = $action;
+
+        $eventName = trim($_POST["event_name"] ?? "");
+        $eventDate = trim($_POST["event_date"] ?? "");
+        $startTime = trim($_POST["start_time"] ?? "");
+        $endTime = trim($_POST["end_time"] ?? "");
+        $eventType = trim($_POST["event_type"] ?? "other");
+        $location = trim($_POST["location"] ?? "");
+        $description = trim($_POST["description"] ?? "");
+        $assignedStaff = trim($_POST["assigned_staff"] ?? "");
+        $notes = trim($_POST["notes"] ?? "");
+
+        $editingEventId = trim($_POST["event_id"] ?? "");
+
+        $formValues = [
+            "event_name" => $eventName,
+            "event_date" => $eventDate,
+            "start_time" => $startTime,
+            "end_time" => $endTime,
+            "event_type" => $eventType,
+            "location" => $location,
+            "description" => $description,
+            "assigned_staff" => $assignedStaff,
+            "notes" => $notes
+        ];
+
+        $allowedTypes = [
+            "catering",
+            "inventory",
+            "meeting",
+            "other"
+        ];
+
+        if (
+            $eventName === "" ||
+            $eventDate === "" ||
+            $startTime === ""
+        ) {
+            $error = "Please fill in the event name, date, and start time.";
+        } elseif (!validEventDate($eventDate)) {
+            $error = "Please select a valid event date.";
+        } elseif (
+            !in_array($eventType, $allowedTypes, true)
+        ) {
+            $error = "Please select a valid event type.";
+        } elseif (
+            !preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $startTime) ||
+            ($endTime !== "" &&
+             !preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $endTime))
+        ) {
+            $error = "Please enter valid event times.";
+        } elseif (
+            $endTime !== "" &&
+            strtotime($endTime) < strtotime($startTime)
+        ) {
+            $error = "End time cannot be earlier than start time.";
+        } elseif (
+            $action === "update_event" &&
+            (
+                !ctype_digit($editingEventId) ||
+                (int)$editingEventId < 1
+            )
+        ) {
+            $error = "Invalid event selected for editing.";
         } else {
-            $error = "Unable to prepare the event. Please check the database connection.";
+            $endTimeValue = ($endTime === "") ? null : $endTime;
+
+            if ($action === "add_event") {
+                $stmt = $conn->prepare(
+                    "INSERT INTO events
+                    (event_name, event_date, start_time, end_time,
+                     event_type, location, description, assigned_staff, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                );
+
+                if ($stmt) {
+                    $stmt->bind_param(
+                        "sssssssss",
+                        $eventName,
+                        $eventDate,
+                        $startTime,
+                        $endTimeValue,
+                        $eventType,
+                        $location,
+                        $description,
+                        $assignedStaff,
+                        $notes
+                    );
+
+                    if ($stmt->execute()) {
+                        $stmt->close();
+
+                        calendarRedirect(
+                            (int)date("n", strtotime($eventDate)),
+                            (int)date("Y", strtotime($eventDate))
+                        );
+                    }
+
+                    $stmt->close();
+                    $error = "Unable to save the event. Please try again.";
+                } else {
+                    $error = "Unable to prepare the event. Please check the database connection.";
+                }
+            } else {
+                $eventId = (int)$editingEventId;
+
+                $stmt = $conn->prepare(
+                    "UPDATE events
+                     SET event_name = ?,
+                         event_date = ?,
+                         start_time = ?,
+                         end_time = ?,
+                         event_type = ?,
+                         location = ?,
+                         description = ?,
+                         assigned_staff = ?,
+                         notes = ?
+                     WHERE id = ?"
+                );
+
+                if ($stmt) {
+                    $stmt->bind_param(
+                        "sssssssssi",
+                        $eventName,
+                        $eventDate,
+                        $startTime,
+                        $endTimeValue,
+                        $eventType,
+                        $location,
+                        $description,
+                        $assignedStaff,
+                        $notes,
+                        $eventId
+                    );
+
+                    if ($stmt->execute()) {
+                        $stmt->close();
+
+                        calendarRedirect(
+                            (int)date("n", strtotime($eventDate)),
+                            (int)date("Y", strtotime($eventDate)),
+                            "all"
+                        );
+                    }
+
+                    $stmt->close();
+                    $error = "Unable to update the event. Please try again.";
+                } else {
+                    $error = "Unable to prepare the update request.";
+                }
+            }
         }
     }
 }
 
 /* GET EVENTS FOR THE SELECTED MONTH */
+
 $eventsByDate = [];
 $monthEvents = [];
 
@@ -151,12 +342,35 @@ if ($stmt) {
     $stmt->close();
 }
 
+/* GET ALL EVENTS FOR VIEW ALL */
+
+$allEvents = [];
+
+$stmt = $conn->prepare(
+    "SELECT id, event_name, event_date, start_time, end_time,
+            event_type, location, description, assigned_staff, notes
+     FROM events
+     ORDER BY event_date ASC, start_time ASC"
+);
+
+if ($stmt) {
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    while ($row = $result->fetch_assoc()) {
+        $allEvents[] = $row;
+    }
+
+    $stmt->close();
+}
+
 /* GET UPCOMING EVENTS */
+
 $upcomingEvents = [];
 $today = date("Y-m-d");
 
 $stmt = $conn->prepare(
-    "SELECT event_name, event_date, start_time, end_time,
+    "SELECT id, event_name, event_date, start_time, end_time,
             event_type, location, description
      FROM events
      WHERE event_date >= ?
@@ -175,32 +389,6 @@ if ($stmt) {
     }
 
     $stmt->close();
-}
-
-function calendarEscape($value) {
-    return htmlspecialchars((string)$value, ENT_QUOTES, "UTF-8");
-}
-
-function eventBadgeClass($type) {
-    $classes = [
-        "catering" => "badge-catering",
-        "inventory" => "badge-inventory",
-        "meeting" => "badge-meeting",
-        "other" => "badge-other"
-    ];
-
-    return $classes[$type] ?? "badge-other";
-}
-
-function eventTypeLabel($type) {
-    $labels = [
-        "catering" => "Catering Event",
-        "inventory" => "Inventory Restock",
-        "meeting" => "Meeting",
-        "other" => "Other"
-    ];
-
-    return $labels[$type] ?? "Other";
 }
 ?>
 
@@ -453,6 +641,7 @@ function eventTypeLabel($type) {
 
     .right-events-section {
       flex: 1;
+      min-width: 0;
     }
 
     .calendar-control-bar {
@@ -639,6 +828,7 @@ function eventTypeLabel($type) {
       font-weight: 700;
       color: #2d3748;
       line-height: 1;
+      flex-shrink: 0;
     }
 
     .date-badge .month {
@@ -653,6 +843,8 @@ function eventTypeLabel($type) {
     .event-details {
       display: flex;
       flex-direction: column;
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
 
     .event-details h3 {
@@ -702,6 +894,8 @@ function eventTypeLabel($type) {
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
       transform: scale(0.92);
       transition: transform 0.25s ease;
+      max-height: 90vh;
+      overflow-y: auto;
     }
 
     .modal-overlay.active .modal-container {
@@ -733,6 +927,7 @@ function eventTypeLabel($type) {
     .form-field {
       display: flex;
       flex-direction: column;
+      min-width: 0;
     }
 
     .form-field label {
@@ -835,349 +1030,471 @@ function eventTypeLabel($type) {
 </head>
 <body>
 
-  <div class="app-layout">
-    <header class="topbar">
-      <div class="brand-container">
-        <button class="hamburger-btn" type="button">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-        </button>
-        <span class="brand-name">DocuBiz</span>
+<div class="app-layout">
+  <header class="topbar">
+    <div class="brand-container">
+      <button class="hamburger-btn" type="button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+      <span class="brand-name">DocuBiz</span>
+    </div>
+
+    <div class="search-bar">
+      <input type="text" id="eventSearch" placeholder="Search events...">
+      <button type="button" class="search-btn" id="searchBtn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      </button>
+    </div>
+
+    <div class="topbar-actions">
+      <button class="icon-btn" type="button" aria-label="Settings">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 1 .33-1.82 1.65 1.65 0 0 1-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 1 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 1 1 1.51 1.65 1.65 0 0 1 1.82-.33l.06-.06a2 2 0 0 1 2.83 0l.06.06a2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 1-.33 1.82V9a1.65 1.65 0 0 1 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 1-1.51 1z"></path></svg>
+      </button>
+
+      <button class="icon-btn" type="button" aria-label="Notifications">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+      </button>
+
+      <div class="user-profile">
+        <?php
+        $displayName = trim(
+            $_SESSION["user_name"] ??
+            $_SESSION["full_name"] ??
+            $_SESSION["user_email"] ??
+            $_SESSION["email"] ??
+            "User"
+        );
+        ?>
+        <div class="profile-avatar">
+          <?php echo calendarEscape(strtoupper(substr($displayName, 0, 2))); ?>
+        </div>
+        <div class="profile-info">
+          <span class="user-name"><?php echo calendarEscape($displayName); ?></span>
+          <span class="user-role">Admin Staff</span>
+        </div>
       </div>
 
-      <div class="search-bar">
-        <input type="text" id="eventSearch" placeholder="Search events...">
-        <button type="button" class="search-btn" id="searchBtn">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <a href="logout.php" class="logout-link" style="color:#fff;text-decoration:none;font-size:.8rem;">Log Out</a>
+    </div>
+  </header>
+
+  <div class="main-body">
+    <aside class="sidebar">
+      <nav class="sidebar-menu">
+        <a href="dashboard.php" class="menu-item">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          <span>Dashboard</span>
+        </a>
+        <a href="messages.php" class="menu-item">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          <span>Messages</span>
+        </a>
+        <a href="calendar.php" class="menu-item active">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          <span>Calendar</span>
+        </a>
+        <a href="projects.php" class="menu-item">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+          <span>Projects</span>
+        </a>
+        <a href="inventory.php" class="menu-item">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+          <span>Inventory</span>
+        </a>
+        <a href="documents.php" class="menu-item">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+          <span>Documents</span>
+        </a>
+        <a href="staff_management.php" class="menu-item">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          <span>Staff Management</span>
+        </a>
+        <a href="finances.php" class="menu-item">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+          <span>Finances</span>
+        </a>
+      </nav>
+    </aside>
+
+    <main class="content-area">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Calendar</h1>
+          <p class="page-subtitle">Manage catering events, deliveries, and important schedules.</p>
+        </div>
+        <button class="btn-add-event" id="openModalBtn" type="button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Add Event
         </button>
       </div>
 
-      <div class="topbar-actions">
-        <button class="icon-btn" type="button" aria-label="Settings">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 1 .33-1.82 1.65 1.65 0 0 1-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 1 1.82.33H9a1.65 1.65 0 0 1 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 1 1 1.51 1.65 1.65 0 0 1 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 1-.33 1.82V9a1.65 1.65 0 0 1 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 1-1.51 1z"></path></svg>
-        </button>
-        <button class="icon-btn" type="button" aria-label="Notifications">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-        </button>
-
-        <div class="user-profile">
-          <div class="profile-avatar">
-            <?php
-            $displayName = trim($_SESSION["user_name"] ?? $_SESSION["full_name"] ?? $_SESSION["user_email"] ?? $_SESSION["email"] ?? "User");
-            echo calendarEscape(strtoupper(substr($displayName, 0, 2)));
-            ?>
+      <div class="calendar-grid-container">
+        <div class="left-calendar-section">
+          <div class="calendar-control-bar">
+            <div class="month-nav">
+              <a class="nav-arrow" href="calendar.php?month=<?php echo $prevMonth; ?>&year=<?php echo $prevYear; ?>" aria-label="Previous month" style="text-decoration:none">&lt;</a>
+              <span class="current-month"><?php echo calendarEscape($currentMonthLabel); ?></span>
+              <a class="nav-arrow" href="calendar.php?month=<?php echo $nextMonth; ?>&year=<?php echo $nextYear; ?>" aria-label="Next month" style="text-decoration:none">&gt;</a>
+            </div>
+            <a class="btn-today" href="calendar.php" style="text-decoration:none">Today</a>
           </div>
-          <div class="profile-info">
-            <span class="user-name">
-              <?php echo calendarEscape($displayName); ?>
-            </span>
-            <span class="user-role">Admin Staff</span>
+
+          <div class="full-calendar-card">
+            <div class="calendar-table-header">
+              <span>Sun</span>
+              <span>Mon</span>
+              <span>Tue</span>
+              <span>Wed</span>
+              <span>Thu</span>
+              <span>Fri</span>
+              <span>Sat</span>
+            </div>
+
+            <div class="calendar-month-grid">
+              <?php
+              for ($blank = 0; $blank < $firstWeekday; $blank++) {
+                  echo '<div class="day-box"></div>';
+              }
+
+              for ($day = 1; $day <= $daysInMonth; $day++) {
+                  $dateKey = sprintf("%04d-%02d-%02d", $year, $month, $day);
+
+                  echo '<div class="day-box">';
+                  echo '<span class="day-number">' . $day . '</span>';
+
+                  if (!empty($eventsByDate[$dateKey])) {
+                      foreach ($eventsByDate[$dateKey] as $calendarEvent) {
+                          echo '<div class="event-badge ' .
+                              eventBadgeClass($calendarEvent["event_type"]) .
+                              '" title="' .
+                              calendarEscape($calendarEvent["event_name"]) .
+                              '">' .
+                              calendarEscape($calendarEvent["event_name"]) .
+                              '</div>';
+                      }
+                  }
+
+                  echo '</div>';
+              }
+
+              $totalCells = $firstWeekday + $daysInMonth;
+              $trailingBlanks = (7 - ($totalCells % 7)) % 7;
+
+              for ($blank = 0; $blank < $trailingBlanks; $blank++) {
+                  echo '<div class="day-box"></div>';
+              }
+              ?>
+            </div>
+          </div>
+
+          <div class="calendar-legend">
+            <div class="legend-item"><span class="legend-dot dot-catering"></span><span>Catering Event</span></div>
+            <div class="legend-item"><span class="legend-dot dot-inventory"></span><span>Inventory Restock</span></div>
+            <div class="legend-item"><span class="legend-dot dot-meeting"></span><span>Meeting</span></div>
+            <div class="legend-item"><span class="legend-dot dot-other"></span><span>Other</span></div>
           </div>
         </div>
 
-        <a href="logout.php" class="logout-link" style="color:#fff;text-decoration:none;font-size:.8rem;">Log Out</a>
-      </div>
-    </header>
+        <div class="right-events-section">
+          <div class="card">
+            <div class="card-header">
+              <h2><?php echo $showAll ? "All Events" : "Upcoming Events"; ?></h2>
 
-    <div class="main-body">
-      <aside class="sidebar">
-        <nav class="sidebar-menu">
-          <a href="dashboard.php" class="menu-item">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-            <span>Dashboard</span>
-          </a>
-          <a href="messages.php" class="menu-item">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-            <span>Messages</span>
-          </a>
-          <a href="calendar.php" class="menu-item active">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-            <span>Calendar</span>
-          </a>
-          <a href="projects.php" class="menu-item">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-            <span>Projects</span>
-          </a>
-          <a href="inventory.php" class="menu-item">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
-            <span>Inventory</span>
-          </a>
-          <a href="documents.html" class="menu-item">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-            <span>Documents</span>
-          </a>
-          <a href="staff_management.html" class="menu-item">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-            <span>Staff Management</span>
-          </a>
-          <a href="finances.html" class="menu-item">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
-            <span>Finances</span>
-          </a>
-        </nav>
-      </aside>
-
-      <main class="content-area">
-        <div class="page-header">
-          <div>
-            <h1 class="page-title">Calendar</h1>
-            <p class="page-subtitle">Manage catering events, deliveries, and important schedules.</p>
-          </div>
-          <button class="btn-add-event" id="openModalBtn" type="button">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            Add Event
-          </button>
-        </div>
-
-        <div class="calendar-grid-container">
-          <div class="left-calendar-section">
-            <div class="calendar-control-bar">
-              <div class="month-nav">
-                <a class="nav-arrow" href="calendar.php?month=<?php echo $prevMonth; ?>&year=<?php echo $prevYear; ?>" aria-label="Previous month" style="text-decoration:none">&lt;</a>
-                <span class="current-month"><?php echo calendarEscape($currentMonthLabel); ?></span>
-                <a class="nav-arrow" href="calendar.php?month=<?php echo $nextMonth; ?>&year=<?php echo $nextYear; ?>" aria-label="Next month" style="text-decoration:none">&gt;</a>
-              </div>
-              <a class="btn-today" href="calendar.php" style="text-decoration:none">Today</a>
+              <?php if ($showAll): ?>
+                <a href="calendar.php" class="view-all">Back</a>
+              <?php else: ?>
+                <a href="calendar.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>&view=all" class="view-all">View All</a>
+              <?php endif; ?>
             </div>
 
-            <div class="full-calendar-card">
-              <div class="calendar-table-header">
-                <span>Sun</span>
-                <span>Mon</span>
-                <span>Tue</span>
-                <span>Wed</span>
-                <span>Thu</span>
-                <span>Fri</span>
-                <span>Sat</span>
-              </div>
+            <div class="upcoming-events-list" id="upcoming-events">
+              <?php if ($showAll): ?>
 
-              <div class="calendar-month-grid">
-                <?php
-                for ($blank = 0; $blank < $firstWeekday; $blank++) {
-                    echo '<div class="day-box"></div>';
-                }
+                <?php if (empty($allEvents)): ?>
+                  <p style="font-size:0.82rem;color:#718096;">No events have been added yet.</p>
+                <?php else: ?>
 
-                for ($day = 1; $day <= $daysInMonth; $day++) {
-                    $dateKey = sprintf("%04d-%02d-%02d", $year, $month, $day);
+                  <?php foreach ($allEvents as $event): ?>
+                    <div class="upcoming-event-item searchable-event">
+                      <div class="date-badge <?php echo eventBadgeClass($event["event_type"]); ?>">
+                        <span class="month"><?php echo strtoupper(date("M", strtotime($event["event_date"]))); ?></span>
+                        <span class="day"><?php echo date("d", strtotime($event["event_date"])); ?></span>
+                      </div>
 
-                    echo '<div class="day-box">';
-                    echo '<span class="day-number">' . $day . '</span>';
+                      <div class="event-details">
+                        <h3><?php echo calendarEscape($event["event_name"]); ?></h3>
 
-                    if (!empty($eventsByDate[$dateKey])) {
-                        foreach ($eventsByDate[$dateKey] as $calendarEvent) {
-                            echo '<div class="event-badge ' .
-                                eventBadgeClass($calendarEvent["event_type"]) .
-                                '" title="' .
-                                calendarEscape($calendarEvent["event_name"]) .
-                                '">' .
-                                calendarEscape($calendarEvent["event_name"]) .
-                                '</div>';
-                        }
-                    }
+                        <span class="meta">
+                          <?php echo calendarEscape(date("M d, Y", strtotime($event["event_date"]))); ?>
+                          · <?php echo calendarEscape(date("g:i A", strtotime($event["start_time"]))); ?>
+                          <?php if (!empty($event["end_time"])): ?>
+                            - <?php echo calendarEscape(date("g:i A", strtotime($event["end_time"]))); ?>
+                          <?php endif; ?>
+                        </span>
 
-                    echo '</div>';
-                }
+                        <span class="location">
+                          <?php echo calendarEscape($event["location"] ?: eventTypeLabel($event["event_type"])); ?>
+                        </span>
 
-                $totalCells = $firstWeekday + $daysInMonth;
-                $trailingBlanks = (7 - ($totalCells % 7)) % 7;
+                        <?php if (!empty($event["assigned_staff"])): ?>
+                          <span class="location">Staff: <?php echo calendarEscape($event["assigned_staff"]); ?></span>
+                        <?php endif; ?>
 
-                for ($blank = 0; $blank < $trailingBlanks; $blank++) {
-                    echo '<div class="day-box"></div>';
-                }
-                ?>
-              </div>
-            </div>
+                        <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;">
+                          <button
+                            type="button"
+                            class="edit-event-btn"
+                            style="padding:5px 12px;border:none;border-radius:6px;background:#72dbd9;color:#1a365d;font-size:0.75rem;font-weight:600;cursor:pointer;"
+                            data-id="<?php echo (int)$event["id"]; ?>"
+                            data-name="<?php echo calendarEscape($event["event_name"]); ?>"
+                            data-date="<?php echo calendarEscape($event["event_date"]); ?>"
+                            data-start="<?php echo calendarEscape(substr($event["start_time"], 0, 5)); ?>"
+                            data-end="<?php echo calendarEscape(substr((string)$event["end_time"], 0, 5)); ?>"
+                            data-type="<?php echo calendarEscape($event["event_type"]); ?>"
+                            data-location="<?php echo calendarEscape($event["location"]); ?>"
+                            data-description="<?php echo calendarEscape($event["description"]); ?>"
+                            data-staff="<?php echo calendarEscape($event["assigned_staff"]); ?>"
+                            data-notes="<?php echo calendarEscape($event["notes"]); ?>"
+                          >Edit</button>
 
-            <div class="calendar-legend">
-              <div class="legend-item">
-                <span class="legend-dot dot-catering"></span>
-                <span>Catering Event</span>
-              </div>
-              <div class="legend-item">
-                <span class="legend-dot dot-inventory"></span>
-                <span>Inventory Restock</span>
-              </div>
-              <div class="legend-item">
-                <span class="legend-dot dot-meeting"></span>
-                <span>Meeting</span>
-              </div>
-              <div class="legend-item">
-                <span class="legend-dot dot-other"></span>
-                <span>Other</span>
-              </div>
-            </div>
-          </div>
+                          <form method="POST" action="calendar.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>&view=all" onsubmit="return confirm('Are you sure you want to delete this event? This action cannot be undone.');" style="margin:0;">
+                            <input type="hidden" name="form_action" value="delete_event">
+                            <input type="hidden" name="event_id" value="<?php echo (int)$event["id"]; ?>">
+                            <button type="submit" style="padding:5px 12px;border:none;border-radius:6px;background:#fca5a5;color:#7f1d1d;font-size:0.75rem;font-weight:600;cursor:pointer;">Delete</button>
+                          </form>
+                        </div>
+                      </div>
+                    </div>
+                  <?php endforeach; ?>
 
-          <div class="right-events-section">
-            <div class="card">
-              <div class="card-header">
-                <h2>Upcoming Events</h2>
-                <a href="#upcoming-events" class="view-all">View All</a>
-              </div>
+                <?php endif; ?>
 
-              <div class="upcoming-events-list" id="upcoming-events">
+              <?php else: ?>
+
                 <?php if (empty($upcomingEvents)): ?>
                   <p style="font-size:0.82rem;color:#718096;">No upcoming events yet.</p>
                 <?php else: ?>
+
                   <?php foreach ($upcomingEvents as $upcoming): ?>
-                    <div class="upcoming-event-item">
+                    <div class="upcoming-event-item searchable-event">
                       <div class="date-badge <?php echo eventBadgeClass($upcoming["event_type"]); ?>">
                         <span class="month"><?php echo strtoupper(date("M", strtotime($upcoming["event_date"]))); ?></span>
                         <span class="day"><?php echo date("d", strtotime($upcoming["event_date"])); ?></span>
                       </div>
+
                       <div class="event-details">
                         <h3><?php echo calendarEscape($upcoming["event_name"]); ?></h3>
+
                         <span class="meta">
                           <?php echo calendarEscape(date("g:i A", strtotime($upcoming["start_time"]))); ?>
                           <?php if (!empty($upcoming["end_time"])): ?>
                             - <?php echo calendarEscape(date("g:i A", strtotime($upcoming["end_time"]))); ?>
                           <?php endif; ?>
                         </span>
+
                         <span class="location">
                           <?php echo calendarEscape($upcoming["location"] ?: eventTypeLabel($upcoming["event_type"])); ?>
                         </span>
                       </div>
                     </div>
                   <?php endforeach; ?>
+
                 <?php endif; ?>
-              </div>
+
+              <?php endif; ?>
             </div>
           </div>
         </div>
-      </main>
-    </div>
-  </div>
-
-  <div class="modal-overlay <?php echo ($error !== "") ? 'active' : ''; ?>" id="addEventModal">
-    <div class="modal-container">
-      <div class="modal-header">
-        <h2>Add Event</h2>
       </div>
+    </main>
+  </div>
+</div>
 
-      <div class="modal-body">
-        <?php if ($success): ?>
-          <p style="color:#27834a;margin-bottom:14px;">Event saved successfully!</p>
-        <?php endif; ?>
+<!-- ADD / EDIT EVENT MODAL -->
 
-        <?php if ($error !== ""): ?>
-          <p role="alert" style="color:#d93025;margin-bottom:14px;"><?php echo calendarEscape($error); ?></p>
-        <?php endif; ?>
+<div class="modal-overlay <?php echo ($error !== "") ? 'active' : ''; ?>" id="addEventModal">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h2 id="modalTitle">
+        <?php echo $formAction === "update_event" ? "Edit Event" : "Add Event"; ?>
+      </h2>
+    </div>
 
-        <form action="calendar.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>" method="POST" id="eventForm">
-          <input type="hidden" name="form_action" value="add_event">
+    <div class="modal-body">
+      <?php if ($error !== ""): ?>
+        <p role="alert" style="color:#d93025;margin-bottom:14px;">
+          <?php echo calendarEscape($error); ?>
+        </p>
+      <?php endif; ?>
 
-          <div class="modal-form-grid">
-            <div class="form-field">
-              <label for="event_name">Event Name</label>
-              <input type="text" id="event_name" name="event_name" placeholder="Enter event name" required>
-            </div>
+      <form action="calendar.php?month=<?php echo $month; ?>&year=<?php echo $year; ?><?php echo $showAll ? '&view=all' : ''; ?>" method="POST" id="eventForm">
+        <input type="hidden" name="form_action" id="formAction" value="<?php echo calendarEscape($formAction); ?>">
+        <input type="hidden" name="event_id" id="event_id" value="<?php echo calendarEscape($editingEventId); ?>">
 
-            <div class="form-field">
-              <label for="start_time">Start Time</label>
-              <input type="time" id="start_time" name="start_time" required>
-            </div>
-
-            <div class="form-field">
-              <label for="event_date">Date</label>
-              <input type="date" id="event_date" name="event_date" required>
-            </div>
-
-            <div class="form-field">
-              <label for="end_time">End Time</label>
-              <input type="time" id="end_time" name="end_time">
-            </div>
-
-            <div class="form-field">
-              <label for="event_type">Event Type</label>
-              <select id="event_type" name="event_type" required>
-                <option value="catering" selected>Catering Event</option>
-                <option value="inventory">Inventory Restock</option>
-                <option value="meeting">Meeting</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-
-            <div class="form-field">
-              <label for="location">Location</label>
-              <input type="text" id="location" name="location" placeholder="Enter Location">
-            </div>
-
-            <div class="form-field">
-              <label for="description">Event Description</label>
-              <textarea id="description" name="description" placeholder="Event Description (optional)"></textarea>
-            </div>
-
-            <div class="form-field">
-              <label for="assigned_staff">Assigned Staff</label>
-              <input type="text" id="assigned_staff" name="assigned_staff" placeholder="Enter staff name" style="margin-bottom: 12px;">
-
-              <label for="notes">Notes</label>
-              <textarea id="notes" name="notes" placeholder="Add notes (optional)"></textarea>
-            </div>
+        <div class="modal-form-grid">
+          <div class="form-field">
+            <label for="event_name">Event Name</label>
+            <input type="text" id="event_name" name="event_name" placeholder="Enter event name" value="<?php echo calendarEscape($formValues["event_name"]); ?>" required>
           </div>
 
-          <div class="modal-actions">
-            <button type="button" class="btn-modal-cancel" id="closeModalBtn">Cancel</button>
-            <button type="submit" class="btn-modal-save" id="saveModalBtn">Save Event</button>
+          <div class="form-field">
+            <label for="start_time">Start Time</label>
+            <input type="time" id="start_time" name="start_time" value="<?php echo calendarEscape($formValues["start_time"]); ?>" required>
           </div>
-        </form>
-      </div>
+
+          <div class="form-field">
+            <label for="event_date">Date</label>
+            <input type="date" id="event_date" name="event_date" value="<?php echo calendarEscape($formValues["event_date"]); ?>" required>
+          </div>
+
+          <div class="form-field">
+            <label for="end_time">End Time</label>
+            <input type="time" id="end_time" name="end_time" value="<?php echo calendarEscape($formValues["end_time"]); ?>">
+          </div>
+
+          <div class="form-field">
+            <label for="event_type">Event Type</label>
+            <select id="event_type" name="event_type" required>
+              <option value="catering" <?php echo $formValues["event_type"] === "catering" ? "selected" : ""; ?>>Catering Event</option>
+              <option value="inventory" <?php echo $formValues["event_type"] === "inventory" ? "selected" : ""; ?>>Inventory Restock</option>
+              <option value="meeting" <?php echo $formValues["event_type"] === "meeting" ? "selected" : ""; ?>>Meeting</option>
+              <option value="other" <?php echo $formValues["event_type"] === "other" ? "selected" : ""; ?>>Other</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="location">Location</label>
+            <input type="text" id="location" name="location" placeholder="Enter Location" value="<?php echo calendarEscape($formValues["location"]); ?>">
+          </div>
+
+          <div class="form-field">
+            <label for="description">Event Description</label>
+            <textarea id="description" name="description" placeholder="Event Description (optional)"><?php echo calendarEscape($formValues["description"]); ?></textarea>
+          </div>
+
+          <div class="form-field">
+            <label for="assigned_staff">Assigned Staff</label>
+            <input type="text" id="assigned_staff" name="assigned_staff" placeholder="Enter staff name" value="<?php echo calendarEscape($formValues["assigned_staff"]); ?>" style="margin-bottom:12px;">
+
+            <label for="notes">Notes</label>
+            <textarea id="notes" name="notes" placeholder="Add notes (optional)"><?php echo calendarEscape($formValues["notes"]); ?></textarea>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-modal-cancel" id="closeModalBtn">Cancel</button>
+          <button type="submit" class="btn-modal-save" id="saveModalBtn">
+            <?php echo $formAction === "update_event" ? "Update Event" : "Save Event"; ?>
+          </button>
+        </div>
+      </form>
     </div>
   </div>
+</div>
 
-  <script>
-    const openModalBtn = document.getElementById('openModalBtn');
-    const closeModalBtn = document.getElementById('closeModalBtn');
-    const modalOverlay = document.getElementById('addEventModal');
-    const eventSearch = document.getElementById('eventSearch');
-    const searchBtn = document.getElementById('searchBtn');
+<script>
+  const openModalBtn = document.getElementById('openModalBtn');
+  const closeModalBtn = document.getElementById('closeModalBtn');
+  const modalOverlay = document.getElementById('addEventModal');
+  const eventSearch = document.getElementById('eventSearch');
+  const searchBtn = document.getElementById('searchBtn');
 
-    openModalBtn.addEventListener('click', function () {
-      modalOverlay.classList.add('active');
+  const eventForm = document.getElementById('eventForm');
+  const formAction = document.getElementById('formAction');
+  const eventId = document.getElementById('event_id');
+  const modalTitle = document.getElementById('modalTitle');
+  const saveModalBtn = document.getElementById('saveModalBtn');
+
+  const fields = {
+    name: document.getElementById('event_name'),
+    date: document.getElementById('event_date'),
+    start: document.getElementById('start_time'),
+    end: document.getElementById('end_time'),
+    type: document.getElementById('event_type'),
+    location: document.getElementById('location'),
+    description: document.getElementById('description'),
+    staff: document.getElementById('assigned_staff'),
+    notes: document.getElementById('notes')
+  };
+
+  function openAddModal() {
+    eventForm.reset();
+
+    formAction.value = 'add_event';
+    eventId.value = '';
+
+    modalTitle.textContent = 'Add Event';
+    saveModalBtn.textContent = 'Save Event';
+
+    modalOverlay.classList.add('active');
+  }
+
+  function openEditModal(button) {
+    formAction.value = 'update_event';
+    eventId.value = button.dataset.id;
+
+    fields.name.value = button.dataset.name || '';
+    fields.date.value = button.dataset.date || '';
+    fields.start.value = button.dataset.start || '';
+    fields.end.value = button.dataset.end || '';
+    fields.type.value = button.dataset.type || 'other';
+    fields.location.value = button.dataset.location || '';
+    fields.description.value = button.dataset.description || '';
+    fields.staff.value = button.dataset.staff || '';
+    fields.notes.value = button.dataset.notes || '';
+
+    modalTitle.textContent = 'Edit Event';
+    saveModalBtn.textContent = 'Update Event';
+
+    modalOverlay.classList.add('active');
+  }
+
+  openModalBtn.addEventListener('click', openAddModal);
+
+  document.querySelectorAll('.edit-event-btn').forEach(function(button) {
+    button.addEventListener('click', function() {
+      openEditModal(button);
     });
+  });
 
-    closeModalBtn.addEventListener('click', function () {
+  closeModalBtn.addEventListener('click', function() {
+    modalOverlay.classList.remove('active');
+  });
+
+  modalOverlay.addEventListener('click', function(e) {
+    if (e.target === modalOverlay) {
       modalOverlay.classList.remove('active');
-    });
-
-    modalOverlay.addEventListener('click', function (e) {
-      if (e.target === modalOverlay) {
-        modalOverlay.classList.remove('active');
-      }
-    });
-
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') {
-        modalOverlay.classList.remove('active');
-      }
-    });
-
-    function searchEvents() {
-      const searchValue = eventSearch.value.trim().toLowerCase();
-      const eventBadges = document.querySelectorAll('.event-badge');
-      const upcomingItems = document.querySelectorAll('.upcoming-event-item');
-
-      eventBadges.forEach(function (badge) {
-        const matches = badge.textContent.toLowerCase().includes(searchValue);
-        badge.style.display = matches ? '' : 'none';
-      });
-
-      upcomingItems.forEach(function (item) {
-        const matches = item.textContent.toLowerCase().includes(searchValue);
-        item.style.display = matches ? '' : 'none';
-      });
     }
+  });
 
-    searchBtn.addEventListener('click', searchEvents);
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      modalOverlay.classList.remove('active');
+    }
+  });
 
-    eventSearch.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        searchEvents();
-      }
+  function searchEvents() {
+    const searchValue = eventSearch.value.trim().toLowerCase();
+
+    document.querySelectorAll('.event-badge').forEach(function(badge) {
+      badge.style.display = badge.textContent.toLowerCase().includes(searchValue) ? '' : 'none';
     });
 
-    eventSearch.addEventListener('input', searchEvents);
-  </script>
+    document.querySelectorAll('.searchable-event').forEach(function(item) {
+      item.style.display = item.textContent.toLowerCase().includes(searchValue) ? '' : 'none';
+    });
+  }
+
+  searchBtn.addEventListener('click', searchEvents);
+  eventSearch.addEventListener('input', searchEvents);
+
+  eventSearch.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      searchEvents();
+    }
+  });
+</script>
 
 </body>
 </html>

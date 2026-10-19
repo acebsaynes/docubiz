@@ -1,3 +1,23 @@
+<?php
+session_start();
+
+if (!isset($_SESSION["user_id"])) {
+    header("Location: login.php");
+    exit;
+}
+
+$userEmail = $_SESSION["user_email"] ?? "user@gmail.com";
+$userName  = $_SESSION["user_name"]  ?? "User";
+
+// Kukunin ang initials mula sa pangalan ng nag-login (halimbawa: "Jana Lei" -> "JL")
+$nameParts = explode(" ", trim($userName));
+$avatarInitials = "";
+if (count($nameParts) >= 2) {
+    $avatarInitials = strtoupper(substr($nameParts[0], 0, 1) . substr(end($nameParts), 0, 1));
+} else {
+    $avatarInitials = strtoupper(substr($userName, 0, 2));
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -125,6 +145,7 @@
     .user-name {
       font-size: 0.82rem;
       font-weight: 500;
+      color: #ffffff;
     }
     .user-role {
       font-size: 0.72rem;
@@ -298,8 +319,6 @@
       background-color: #319795;
       color: #ffffff;
     }
-
-    /* --- POPUP MODAL STYLES (Eksakto sa design mo) --- */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -428,7 +447,6 @@
       color: #2d3748;
       font-weight: 500;
     }
-
     @media (max-width: 900px) {
       .sidebar {
         width: 60px;
@@ -462,16 +480,16 @@
       </div>
       <div class="topbar-actions">
         <button class="icon-btn">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         </button>
         <button class="icon-btn">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
         </button>
         <div class="user-profile">
-          <div class="profile-avatar">JL</div>
+          <div class="profile-avatar"><?php echo htmlspecialchars($avatarInitials); ?></div>
           <div class="profile-info">
-            <span class="user-name">Jana Lei Lumbreras</span>
-            <span class="user-role">Admin Staff</span>
+            <span class="user-name"><?php echo htmlspecialchars($userName); ?></span>
+            <span class="user-role"> Admin Staff </span>
           </div>
         </div>
       </div>
@@ -499,15 +517,15 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
             <span>Inventory</span>
           </a>
-          <a href="documents.html" class="menu-item">
+          <a href="documents.php" class="menu-item">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
             <span>Documents</span>
           </a>
-          <a href="staff_management.html" class="menu-item active">
+          <a href="staff_management.php" class="menu-item active">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
             <span>Staff Management</span>
           </a>
-          <a href="finances.html" class="menu-item">
+          <a href="finances.php" class="menu-item">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
             <span>Finances</span>
           </a>
@@ -532,7 +550,6 @@
             </button>
           </div>
         </div>
-
         <div class="staff-table-card">
           <table class="staff-table">
             <thead>
@@ -656,8 +673,7 @@
       </main>
     </div>
   </div>
-
-  <!-- POP-OUT MODAL STRUCTURE -->
+  
   <div class="modal-overlay" id="staffModal">
     <div class="modal-card">
       <button class="modal-close-btn" onclick="closeModal()">&times;</button>
@@ -676,9 +692,7 @@
         </div>
         <button class="message-btn">Message</button>
       </div>
-
       <hr class="modal-divider">
-
       <div class="modal-section-title">Contact Information</div>
       <div class="modal-grid-info">
         <div class="info-group">
@@ -698,7 +712,6 @@
           <span>4114</span>
         </div>
       </div>
-
       <div class="modal-section-title">Employment Details</div>
       <div class="modal-grid-info">
         <div class="info-group">
@@ -717,7 +730,6 @@
     </div>
   </div>
 
-  <!-- SCRIPT PARA SA POP-OUT TRIGGER -->
   <script>
     function openModal(row) {
       document.getElementById('modalName').innerText = row.getAttribute('data-name');
@@ -730,11 +742,9 @@
       
       document.getElementById('staffModal').classList.add('active');
     }
-
     function closeModal() {
       document.getElementById('staffModal').classList.remove('active');
     }
-
     window.onclick = function(event) {
       const modal = document.getElementById('staffModal');
       if (event.target === modal) {

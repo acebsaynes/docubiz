@@ -1,3 +1,22 @@
+<?php
+session_start();
+
+if (!isset($_SESSION["user_id"])) {
+    header("Location: login.php");
+    exit;
+}
+
+$userEmail = $_SESSION["user_email"] ?? "user@gmail.com";
+$userName  = $_SESSION["user_name"]  ?? "User";
+
+$nameParts = explode(" ", trim($userName));
+$avatarInitials = "";
+if (count($nameParts) >= 2) {
+    $avatarInitials = strtoupper(substr($nameParts[0], 0, 1) . substr(end($nameParts), 0, 1));
+} else {
+    $avatarInitials = strtoupper(substr($userName, 0, 2));
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,19 +34,16 @@
       box-sizing: border-box;
       font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
-
     body {
       background-color: #d8dcdb;
       color: #333;
       min-height: 100vh;
     }
-
     .app-layout {
       display: flex;
       flex-direction: column;
       min-height: 100vh;
     }
-
     .topbar {
       background-color: #122b49;
       height: 60px;
@@ -37,14 +53,12 @@
       padding: 0 20px;
       color: #ffffff;
     }
-
     .brand-container {
       display: flex;
       align-items: center;
       gap: 15px;
       width: 200px;
     }
-
     .hamburger-btn {
       background: none;
       border: none;
@@ -53,20 +67,17 @@
       display: flex;
       align-items: center;
     }
-
     .brand-name {
       font-size: 1.4rem;
       font-weight: 600;
       letter-spacing: -0.5px;
     }
-
     .search-bar {
       position: relative;
       width: 450px;
       display: flex;
       align-items: center;
     }
-
     .search-bar input {
       width: 100%;
       padding: 8px 45px 8px 16px;
@@ -77,11 +88,9 @@
       font-size: 0.85rem;
       color: #2d3748;
     }
-
     .search-bar input::placeholder {
       color: #8fa0b5;
     }
-
     .search-btn {
       position: absolute;
       right: 12px;
@@ -92,13 +101,11 @@
       display: flex;
       align-items: center;
     }
-
     .topbar-actions {
       display: flex;
       align-items: center;
       gap: 18px;
     }
-
     .icon-btn {
       background: none;
       border: none;
@@ -108,18 +115,15 @@
       align-items: center;
       opacity: 0.9;
     }
-
     .icon-btn:hover {
       opacity: 1;
     }
-
     .user-profile {
       display: flex;
       align-items: center;
       gap: 10px;
       margin-left: 10px;
     }
-
     .profile-avatar {
       width: 34px;
       height: 34px;
@@ -132,40 +136,34 @@
       font-size: 0.85rem;
       font-weight: 600;
     }
-
     .profile-info {
       display: flex;
       flex-direction: column;
       line-height: 1.2;
     }
-
     .user-name {
       font-size: 0.82rem;
       font-weight: 500;
+      color: #ffffff;
     }
-
     .user-role {
       font-size: 0.72rem;
       color: #9bb3d1;
     }
-
     .main-body {
       display: flex;
       flex: 1;
     }
-
     .sidebar {
       width: 210px;
       background-color: #122b49;
       padding-top: 15px;
       border-top: 1px solid rgba(255, 255, 255, 0.08);
     }
-
     .sidebar-menu {
       display: flex;
       flex-direction: column;
     }
-
     .menu-item {
       display: flex;
       align-items: center;
@@ -176,36 +174,30 @@
       font-size: 0.88rem;
       transition: all 0.2s ease;
     }
-
     .menu-item:hover {
       color: #ffffff;
       background-color: rgba(255, 255, 255, 0.05);
     }
-
     .menu-item.active {
       color: #ffffff;
       background-color: #274b73;
     }
-
     .content-area {
       flex: 1;
       padding: 25px 35px;
       background-color: #d5dad9;
     }
-
     .page-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
       margin-bottom: 20px;
     }
-
     .page-title {
       font-size: 1.8rem;
       font-weight: 600;
       color: #2a343d;
     }
-
     .btn-create-ledger {
       background-color: #72dbd9;
       color: #1a365d;
@@ -220,14 +212,11 @@
       gap: 6px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }
-
-    /* Ledger Navigation Pills */
     .ledger-pills-row {
       display: flex;
       gap: 15px;
       margin-bottom: 25px;
     }
-
     .ledger-pill {
       background-color: #ffffff;
       border: none;
@@ -242,23 +231,18 @@
       cursor: pointer;
       box-shadow: 0 2px 8px rgba(0,0,0,0.03);
     }
-
     .ledger-pill.active {
       border: 1px solid #94a3b8;
     }
-
     .pill-icon {
       font-size: 1.1rem;
     }
-
-    /* Invoice Details Card */
     .invoice-card {
       background-color: #ffffff;
       border-radius: 12px;
       box-shadow: 0 4px 15px rgba(0,0,0,0.04);
       overflow: hidden;
     }
-
     .invoice-header-bar {
       background-color: #80d3ce;
       color: #1e293b;
@@ -270,13 +254,11 @@
       align-items: center;
       justify-content: space-between;
     }
-
     .invoice-meta-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       border-bottom: 1px solid #e2e8f0;
     }
-
     .meta-box {
       padding: 15px 20px;
       border-right: 1px solid #e2e8f0;
@@ -284,36 +266,29 @@
       flex-direction: column;
       gap: 4px;
     }
-
     .meta-box:last-child {
       border-right: none;
     }
-
     .meta-label {
       font-size: 0.72rem;
       color: #64748b;
     }
-
     .meta-value {
       font-size: 0.85rem;
       font-weight: 600;
       color: #1e293b;
     }
-
     .order-summary-title {
       font-size: 0.85rem;
       font-weight: 600;
       color: #475569;
       padding: 15px 20px 10px 20px;
     }
-
-    /* Order Summary Table */
     .order-table {
       width: 100%;
       border-collapse: collapse;
       text-align: left;
     }
-
     .order-table th {
       background-color: #b2f5ea;
       font-size: 0.75rem;
@@ -322,7 +297,6 @@
       padding: 10px 20px;
       border-bottom: 1px solid #cbd5e0;
     }
-
     .order-table td {
       padding: 12px 20px;
       font-size: 0.82rem;
@@ -330,13 +304,11 @@
       border-bottom: 1px solid #f1f5f9;
       vertical-align: middle;
     }
-
     .order-table tr:last-child td {
       border-bottom: none;
       font-weight: 700;
       color: #1e293b;
     }
-
     @media (max-width: 900px) {
       .ledger-pills-row {
         flex-wrap: wrap;
@@ -357,7 +329,6 @@
   </style>
 </head>
 <body>
-
   <div class="app-layout">
     <header class="topbar">
       <div class="brand-container">
@@ -366,32 +337,28 @@
         </button>
         <span class="brand-name">DocuBiz</span>
       </div>
-
       <div class="search-bar">
         <input type="text" placeholder="Search finance files...">
         <button type="button" class="search-btn">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
         </button>
       </div>
-
       <div class="topbar-actions">
         <button class="icon-btn">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         </button>
         <button class="icon-btn">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
         </button>
-
         <div class="user-profile">
-          <div class="profile-avatar">Jl</div>
+          <div class="profile-avatar"><?php echo htmlspecialchars($avatarInitials); ?></div>
           <div class="profile-info">
-            <span class="user-name">Jana Lei Lumbreras</span>
-            <span class="user-role">Admin Staff</span>
+            <span class="user-name"><?php echo htmlspecialchars($userName); ?></span>
+            <span class="user-role"> Admin Staff </span>
           </div>
         </div>
       </div>
     </header>
-
     <div class="main-body">
       <aside class="sidebar">
         <nav class="sidebar-menu">
@@ -415,21 +382,20 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
             <span>Inventory</span>
           </a>
-          <a href="documents.html" class="menu-item">
+          <a href="documents.php" class="menu-item">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
             <span>Documents</span>
           </a>
-          <a href="staff_management.html" class="menu-item">
+          <a href="staff_management.php" class="menu-item">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
             <span>Staff Management</span>
           </a>
-          <a href="finances.html" class="menu-item active">
+          <a href="finances.php" class="menu-item active">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
             <span>Finances</span>
           </a>
         </nav>
       </aside>
-
       <main class="content-area">
         <div class="page-header">
           <h1 class="page-title">Finances</h1>
@@ -438,7 +404,6 @@
             Create Ledger
           </button>
         </div>
-
         <div class="ledger-pills-row">
           <button class="ledger-pill active">
             <span class="pill-icon" style="color: #ec4899;">📖</span>
@@ -461,13 +426,11 @@
             <span>Reports</span>
           </button>
         </div>
-
         <div class="invoice-card">
           <div class="invoice-header-bar">
             <span>SALES INVOICE DETAILS</span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           </div>
-
           <div class="invoice-meta-grid">
             <div class="meta-box">
               <span class="meta-label">Invoice Number</span>
@@ -486,9 +449,7 @@
               <span class="meta-value">Joy Anne Barcoma</span>
             </div>
           </div>
-
           <div class="order-summary-title">Order Summary</div>
-
           <table class="order-table">
             <thead>
               <tr>
@@ -531,6 +492,5 @@
       </main>
     </div>
   </div>
-
 </body>
 </html>
