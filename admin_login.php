@@ -1,5 +1,75 @@
+
 <?php
 session_start();
+
+require_once "db.php";
+
+$loginError = "";
+
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $adminId = trim($_POST["admin_id"] ?? "");
+    $password = $_POST["password"] ?? "";
+
+    if ($adminId === "" || $password === "") {
+        $loginError = "Please enter your admin ID and password.";
+    } elseif (!ctype_digit($adminId)) {
+        $loginError = "Invalid admin ID or password.";
+    } else {
+        $stmt = $conn->prepare(
+            "SELECT id, full_name, email, password, role
+             FROM users
+             WHERE id = ? AND role = 'admin'
+             LIMIT 1"
+        );
+
+        if ($stmt === false) {
+            error_log("Admin login prepare failed: " . $conn->error);
+            $loginError = "Something went wrong. Please try again.";
+        } else {
+            $adminIdNumber = (int) $adminId;
+            $stmt->bind_param("i", $adminIdNumber);
+
+            if (!$stmt->execute()) {
+                error_log("Admin login query failed: " . $stmt->error);
+                $loginError = "Something went wrong. Please try again.";
+                $stmt->close();
+            } else {
+                $stmt->bind_result(
+                    $userId,
+                    $fullName,
+                    $userEmail,
+                    $hashedPassword,
+                    $userRole
+                );
+
+                $adminFound = $stmt->fetch();
+
+                if (
+                    $adminFound &&
+                    $userRole === "admin" &&
+                    password_verify($password, $hashedPassword)
+                ) {
+                    $stmt->close();
+
+                    session_regenerate_id(true);
+
+                    $_SESSION["user_id"] = $userId;
+                    $_SESSION["user_name"] = $fullName;
+                    $_SESSION["full_name"] = $fullName;
+                    $_SESSION["user_email"] = $userEmail;
+                    $_SESSION["user_role"] = "admin";
+                    $_SESSION["role"] = "admin";
+
+                    header("Location: dashboard.php");
+                    exit;
+                }
+
+                $stmt->close();
+                $loginError = "Invalid admin ID or password.";
+            }
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -140,6 +210,17 @@ session_start();
     .btn-back:hover {
       background-color: #f7fafc;
     }
+
+    .error-message {
+      background: #fed7d7;
+      color: #c53030;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      text-align: center;
+      margin-bottom: 15px;
+    }
+
     @media (max-width: 900px) {
       .container {
         flex-direction: column;
@@ -158,11 +239,18 @@ session_start();
     </div>
     <div class="login-card">
       <h2>Admin Log In</h2>
+
+      <?php if (!empty($loginError)): ?>
+        <div class="error-message">
+          <?php echo htmlspecialchars($loginError, ENT_QUOTES, "UTF-8"); ?>
+        </div>
+      <?php endif; ?>
+
       <form action="admin_login.php" method="POST">
         <div class="form-group">
           <label for="admin_id">ID Number</label>
           <div class="input-wrapper">
-            <input type="text" id="admin_id" name="admin_id" placeholder="00000000" required>
+            <input type="text" id="admin_id" name="admin_id" placeholder="00000000" inputmode="numeric" required>
           </div>
         </div>
         <div class="form-group">
@@ -184,6 +272,7 @@ session_start();
   <script>
     const passwordInput = document.getElementById('password');
     const eyeToggle = document.querySelector('.eye-toggle');
+
     eyeToggle.addEventListener('click', function () {
       const isPassword = passwordInput.type === 'password';
       passwordInput.type = isPassword ? 'text' : 'password';
