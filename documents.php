@@ -1,14 +1,23 @@
 <?php
 session_start();
-
 if (!isset($_SESSION["user_id"])) {
     header("Location: login.php");
     exit;
 }
 
-$userEmail = $_SESSION["user_email"] ?? "user@gmail.com";
-$userName  = $_SESSION["user_name"]  ?? $userEmail;
-$avatarInitials = strtoupper(substr($userEmail, 0, 2));
+// Kunin ang mga kinakailangang impormasyon mula sa Session
+$userEmail = $_SESSION["user_email"] ?? $_SESSION["email"] ?? "user@gmail.com";
+$userName  = $_SESSION["user_name"]  ?? $_SESSION["full_name"] ?? $userEmail;
+
+// Tukuyin ang Role ("Admin Staff" kung admin, "User" kung hindi)
+$userRoleSession = strtolower(trim($_SESSION["user_role"] ?? $_SESSION["role"] ?? "user"));
+$displayRole = ($userRoleSession === "admin") ? "Admin Staff" : "User";
+
+// Kumuha ng Initials mula sa Name o Email
+$nameParts = preg_split('/\s+/', trim($userName));
+$avatarInitials = count($nameParts) >= 2
+    ? strtoupper(substr($nameParts[0], 0, 1) . substr(end($nameParts), 0, 1))
+    : strtoupper(substr($userName, 0, 2));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -143,6 +152,19 @@ $avatarInitials = strtoupper(substr($userEmail, 0, 2));
     .user-role {
       font-size: 0.72rem;
       color: #9bb3d1;
+    }
+    .logout-btn {
+      color: #ffffff;
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 400;
+      opacity: 0.9;
+      transition: opacity 0.2s;
+      margin-left: 5px;
+    }
+    .logout-btn:hover {
+      opacity: 1;
+      text-decoration: underline;
     }
     .main-body {
       display: flex;
@@ -285,19 +307,20 @@ $avatarInitials = strtoupper(substr($userEmail, 0, 2));
         </button>
       </div>
       <div class="topbar-actions">
-        <button class="icon-btn">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-        </button>
+        <a href="settings.php" class="icon-btn" title="Settings">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0l.06.06a2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </a>
         <button class="icon-btn">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
         </button>
         <div class="user-profile">
           <div class="profile-avatar"><?php echo htmlspecialchars($avatarInitials); ?></div>
           <div class="profile-info">
-            <span class="user-name"><?php echo htmlspecialchars($userEmail); ?></span>
-            <span class="user-role"> Admin Staff </span>
+            <span class="user-name"><?php echo htmlspecialchars($userName); ?></span>
+            <span class="user-role"><?php echo htmlspecialchars($displayRole); ?></span>
           </div>
         </div>
+        <a href="logout.php" class="logout-btn">Log Out</a>
       </div>
     </header>
     <div class="main-body">
@@ -327,7 +350,7 @@ $avatarInitials = strtoupper(substr($userEmail, 0, 2));
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
             <span>Documents</span>
           </a>
-         <?php if (($_SESSION["user_role"] ?? $_SESSION["role"] ?? "user") === "admin"): ?>
+         <?php if ($userRoleSession === "admin"): ?>
 <a href="staff_management.php" class="menu-item">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>

@@ -1,16 +1,13 @@
-
 <?php
 session_start();
-
+// Use Philippine local time for the dashboard calendar.
+date_default_timezone_set("Asia/Manila");
 if (!isset($_SESSION["user_id"])) {
     header("Location: login.php");
     exit;
 }
-
 require_once "db.php";
-
 $userId = (int) $_SESSION["user_id"];
-
 /*
  * Always check the user's role directly from the database.
  * This prevents relying only on a session role.
@@ -21,7 +18,6 @@ $roleStmt = $conn->prepare(
      WHERE id = ?
      LIMIT 1"
 );
-
 if (!$roleStmt) {
     error_log("Dashboard role check prepare failed: " . $conn->error);
     session_unset();
@@ -29,9 +25,7 @@ if (!$roleStmt) {
     header("Location: login.php");
     exit;
 }
-
 $roleStmt->bind_param("i", $userId);
-
 if (!$roleStmt->execute()) {
     error_log("Dashboard role check failed: " . $roleStmt->error);
     $roleStmt->close();
@@ -40,39 +34,30 @@ if (!$roleStmt->execute()) {
     header("Location: login.php");
     exit;
 }
-
 $roleStmt->bind_result($dbFullName, $dbEmail, $dbRole);
 $userFound = $roleStmt->fetch();
 $roleStmt->close();
-
 if (!$userFound || !in_array($dbRole, ["admin", "user"], true)) {
     session_unset();
     session_destroy();
     header("Location: login.php");
     exit;
 }
-
 /* Keep the session information synchronized with the database. */
 $_SESSION["user_role"] = $dbRole;
 $_SESSION["role"] = $dbRole;
 $_SESSION["user_name"] = $dbFullName;
 $_SESSION["full_name"] = $dbFullName;
 $_SESSION["user_email"] = $dbEmail;
-
 $isAdmin = ($dbRole === "admin");
-
 $taskMessage = "";
-
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $action = $_POST["task_action"] ?? "";
-
     if ($action === "add_task") {
         $taskTitle = trim($_POST["task_title"] ?? "");
         $deadline = trim($_POST["deadline"] ?? "");
-
         $dateObject = DateTime::createFromFormat("!Y-m-d", $deadline);
         $validDate = $dateObject && $dateObject->format("Y-m-d") === $deadline;
-
         if ($taskTitle === "" || strlen($taskTitle) > 255 || !$validDate) {
             $_SESSION["task_message"] = "Please enter a valid task title and deadline.";
         } else {
@@ -80,117 +65,134 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 "INSERT INTO tasks (user_id, task_title, deadline)
                  VALUES (?, ?, ?)"
             );
-
             if ($stmt) {
                 $stmt->bind_param("iss", $userId, $taskTitle, $deadline);
-
                 if ($stmt->execute()) {
                     $_SESSION["task_message"] = "Task added successfully!";
                 } else {
                     $_SESSION["task_message"] = "Unable to save the task. Please try again.";
                 }
-
                 $stmt->close();
             } else {
                 $_SESSION["task_message"] = "Unable to save the task. Please check your database.";
             }
         }
-
         header("Location: dashboard.php");
         exit;
     }
-
     if ($action === "delete_task") {
         $taskId = (int) ($_POST["task_id"] ?? 0);
-
         if ($taskId > 0) {
             $stmt = $conn->prepare(
                 "DELETE FROM tasks WHERE id = ? AND user_id = ?"
             );
-
             if ($stmt) {
                 $stmt->bind_param("ii", $taskId, $userId);
                 $stmt->execute();
-
                 $_SESSION["task_message"] = $stmt->affected_rows > 0
                     ? "Task deleted successfully!"
                     : "Task could not be found.";
-
                 $stmt->close();
             }
         }
-
         header("Location: dashboard.php");
         exit;
     }
 }
-
 /* One-time message after adding or deleting a task. */
 if (isset($_SESSION["task_message"])) {
     $taskMessage = $_SESSION["task_message"];
     unset($_SESSION["task_message"]);
 }
-
 /* Get the logged-in user's tasks. */
 $userTasks = [];
-
 $stmt = $conn->prepare(
     "SELECT id, task_title, deadline
      FROM tasks
      WHERE user_id = ?
      ORDER BY deadline ASC, id DESC"
 );
-
 if ($stmt) {
     $stmt->bind_param("i", $userId);
     $stmt->execute();
-
     $tasksResult = $stmt->get_result();
-
     while ($task = $tasksResult->fetch_assoc()) {
         $userTasks[] = $task;
     }
-
     $stmt->close();
 }
-
 /* Get upcoming events from the database. */
 $upcomingEvents = [];
-
 $sql = "SELECT event_name, event_date, start_time, event_type,
                location, description, notes
         FROM events
         WHERE event_date >= CURDATE()
         ORDER BY event_date ASC, start_time ASC
         LIMIT 5";
-
 $eventsResult = $conn->query($sql);
-
 if ($eventsResult) {
     while ($event = $eventsResult->fetch_assoc()) {
         $upcomingEvents[] = $event;
     }
 }
-
+/* Build the mini calendar from the current date and saved events. */
+$calendarToday = new DateTimeImmutable("today");
+$calendarYear = (int) $calendarToday->format("Y");
+$calendarMonth = (int) $calendarToday->format("n");
+$calendarDaysInMonth = (int) $calendarToday->format("t");
+$calendarFirstWeekday = (int) (new DateTimeImmutable($calendarToday->format("Y-m-01")))->format("w");
+$calendarMonthStart = $calendarToday->format("Y-m-01");
+$calendarNextMonthStart = $calendarToday->modify("first day of next month")->format("Y-m-d");
+$calendarEventsByDate = [];
+$calendarEventColors = [
+    "catering" => "#d8b4fe",
+    "inventory" => "#fca5a5",
+    "meeting" => "#86efac",
+    "other" => "#9ca3af"
+];
+$calendarStmt = $conn->prepare(
+    "SELECT event_name, event_date, event_type
+     FROM events
+     WHERE event_date >= ? AND event_date < ?
+     ORDER BY event_date ASC, start_time ASC"
+);
+if ($calendarStmt) {
+    $calendarStmt->bind_param("ss", $calendarMonthStart, $calendarNextMonthStart);
+    if ($calendarStmt->execute()) {
+        $calendarResult = $calendarStmt->get_result();
+        while ($calendarEvent = $calendarResult->fetch_assoc()) {
+            $dateKey = $calendarEvent["event_date"];
+            $eventType = strtolower(trim($calendarEvent["event_type"] ?? "other"));
+            if (!isset($calendarEventColors[$eventType])) {
+                $eventType = "other";
+            }
+            if (!isset($calendarEventsByDate[$dateKey])) {
+                $calendarEventsByDate[$dateKey] = [
+                    "color" => $calendarEventColors[$eventType],
+                    "types" => [],
+                    "names" => []
+                ];
+            }
+            $calendarEventsByDate[$dateKey]["types"][$eventType] = true;
+            $calendarEventsByDate[$dateKey]["names"][] = $calendarEvent["event_name"];
+        }
+    }
+    $calendarStmt->close();
+}
 /* Get logged-in user's display name. */
 $displayName = trim($_SESSION["user_name"] ?? "");
-
 if ($displayName === "") {
     $displayName = trim($_SESSION["full_name"] ?? "");
 }
-
 if ($displayName === "") {
     $displayName = trim($_SESSION["user_email"] ?? "");
 }
-
 if ($displayName === "") {
     $displayName = "User";
 }
-
 /* Generate avatar initials. */
 $nameParts = preg_split('/\s+/', $displayName);
 $avatarText = "";
-
 if (count($nameParts) >= 2) {
     $avatarText = strtoupper(
         mb_substr($nameParts[0], 0, 1, "UTF-8") .
@@ -258,7 +260,8 @@ if (count($nameParts) >= 2) {
     }
     .search-bar {
       position: relative;
-      width: 450px;
+      width: 330px;
+      max-width: 330px;
       display: flex;
       align-items: center;
     }
@@ -269,7 +272,11 @@ if (count($nameParts) >= 2) {
       border: none;
       outline: none;
       background-color: #ffffff;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
+      color: #2d3748;
+    }
+    .search-bar input::placeholder {
+      color: #8fa0b5;
     }
     .search-btn {
       position: absolute;
@@ -542,8 +549,8 @@ if (count($nameParts) >= 2) {
       background-color: #319795;
       color: #ffffff;
       border-radius: 50%;
-      width: 22px;
-      height: 22px;
+      width: 24px;
+      height: 24px;
       margin: 0 auto;
     }
     .highlighted-date {
@@ -697,7 +704,7 @@ if (count($nameParts) >= 2) {
       </div>
       <div class="topbar-actions">
         <a href="settings.php" class="icon-btn" aria-label="Settings">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0 .33-1.82A1.65 1.65 0 0 0 3 13h-.09A2 2 0 0 1 1 11a2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 7a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V1a2 2 0 0 1 2-1 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0l.06.06a2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V8a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0 .33-1.82A1.65 1.65 0 0 0 3 13h-.09A2 2 0 0 1 1 11a2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 7a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V1a2 2 0 0 1 2-1 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0l.06.06a2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V8a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         </a>
         <button class="icon-btn" type="button" aria-label="Notifications">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
@@ -743,14 +750,12 @@ if (count($nameParts) >= 2) {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
             <span>Documents</span>
           </a>
-
           <?php if ($isAdmin): ?>
           <a href="staff_management.php" class="menu-item">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
             <span>Staff Management</span>
           </a>
           <?php endif; ?>
-
           <a href="finances.php" class="menu-item">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
             <span>Finances</span>
@@ -784,17 +789,13 @@ if (count($nameParts) >= 2) {
                     foreach ($upcomingEvents as $index => $event):
                       $eventDate = date("F j, Y", strtotime($event["event_date"]));
                       $eventTime = "";
-
                       if (!empty($event["start_time"])) {
                           $eventTime = date("g:i A", strtotime($event["start_time"]));
                       }
-
                       $eventDescription = trim($event["description"] ?? "");
-
                       if ($eventDescription === "") {
                           $eventDescription = trim($event["event_type"] ?? "");
                       }
-
                       $eventLocation = trim($event["location"] ?? "");
                       $eventColor = $eventColors[$index % count($eventColors)];
                   ?>
@@ -837,8 +838,8 @@ if (count($nameParts) >= 2) {
           <div class="right-column">
             <div class="card calendar-card">
               <div class="calendar-header">
-                <div class="cal-day">Monday</div>
-                <div class="cal-date">September 7, 2026</div>
+                <div class="cal-day"><?php echo htmlspecialchars($calendarToday->format("l"), ENT_QUOTES, "UTF-8"); ?></div>
+                <div class="cal-date"><?php echo htmlspecialchars($calendarToday->format("F j, Y"), ENT_QUOTES, "UTF-8"); ?></div>
               </div>
               <div class="calendar-grid">
                 <span class="day-label">SUN</span>
@@ -848,37 +849,39 @@ if (count($nameParts) >= 2) {
                 <span class="day-label">THU</span>
                 <span class="day-label">FRI</span>
                 <span class="day-label">SAT</span>
-                <span class="date-cell empty"></span>
-                <span class="date-cell">1</span>
-                <span class="date-cell">2</span>
-                <span class="date-cell">3</span>
-                <span class="date-cell">4</span>
-                <span class="date-cell">5</span>
-                <span class="date-cell">6</span>
-                <span class="date-cell">7</span>
-                <span class="date-cell active-date">8</span>
-                <span class="date-cell">9</span>
-                <span class="date-cell">10</span>
-                <span class="date-cell">11</span>
-                <span class="date-cell">12</span>
-                <span class="date-cell">13</span>
-                <span class="date-cell">14</span>
-                <span class="date-cell">15</span>
-                <span class="date-cell">16</span>
-                <span class="date-cell">17</span>
-                <span class="date-cell">18</span>
-                <span class="date-cell highlighted-date">19</span>
-                <span class="date-cell">20</span>
-                <span class="date-cell">21</span>
-                <span class="date-cell underlined-date">22</span>
-                <span class="date-cell">23</span>
-                <span class="date-cell">24</span>
-                <span class="date-cell">25</span>
-                <span class="date-cell">26</span>
-                <span class="date-cell">27</span>
-                <span class="date-cell">28</span>
-                <span class="date-cell">29</span>
-                <span class="date-cell">30</span>
+                <?php for ($blankDay = 0; $blankDay < $calendarFirstWeekday; $blankDay++): ?>
+                  <span class="date-cell empty"></span>
+                <?php endfor; ?>
+                <?php for ($calendarDay = 1; $calendarDay <= $calendarDaysInMonth; $calendarDay++): ?>
+                  <?php
+                    $calendarDateKey = sprintf("%04d-%02d-%02d", $calendarYear, $calendarMonth, $calendarDay);
+                    $isToday = ($calendarDateKey === $calendarToday->format("Y-m-d"));
+                    $hasEvents = isset($calendarEventsByDate[$calendarDateKey]);
+                    $dateClasses = "date-cell";
+                    if ($isToday) {
+                        $dateClasses .= " active-date";
+                    }
+                    if ($hasEvents) {
+                        $dateClasses .= " underlined-date";
+                    }
+                    $eventStyle = $hasEvents
+                        ? "border-bottom-color: " . $calendarEventsByDate[$calendarDateKey]["color"] . ";"
+                        : "";
+                    $eventTitle = $hasEvents
+                        ? implode(", ", $calendarEventsByDate[$calendarDateKey]["names"])
+                        : "";
+                  ?>
+                  <span
+                    class="<?php echo htmlspecialchars($dateClasses, ENT_QUOTES, "UTF-8"); ?>"
+                    <?php if ($hasEvents): ?>
+                      style="<?php echo htmlspecialchars($eventStyle, ENT_QUOTES, "UTF-8"); ?>"
+                      title="<?php echo htmlspecialchars($eventTitle, ENT_QUOTES, "UTF-8"); ?>"
+                      aria-label="<?php echo htmlspecialchars(date("F j, Y", strtotime($calendarDateKey)) . ". Events: " . $eventTitle, ENT_QUOTES, "UTF-8"); ?>"
+                    <?php elseif ($isToday): ?>
+                      aria-current="date"
+                    <?php endif; ?>
+                  ><?php echo $calendarDay; ?></span>
+                <?php endfor; ?>
               </div>
             </div>
             <div class="card tasks-card">
@@ -979,30 +982,24 @@ if (count($nameParts) >= 2) {
     const cancelTaskButton = document.getElementById("cancelTaskButton");
     const taskTitleInput = document.getElementById("taskTitle");
     const taskDeadlineInput = document.getElementById("taskDeadline");
-
     addTaskButton.addEventListener("click", function () {
       const isOpen = taskAddForm.classList.toggle("show");
       addTaskButton.setAttribute("aria-expanded", String(isOpen));
-
       if (isOpen) {
         taskTitleInput.focus();
       }
     });
-
     cancelTaskButton.addEventListener("click", function () {
       taskAddForm.classList.remove("show");
       addTaskButton.setAttribute("aria-expanded", "false");
       taskAddForm.reset();
     });
-
     const today = new Date();
-
     const localToday = [
       today.getFullYear(),
       String(today.getMonth() + 1).padStart(2, "0"),
       String(today.getDate()).padStart(2, "0")
     ].join("-");
-
     taskDeadlineInput.min = localToday;
   </script>
 </body>

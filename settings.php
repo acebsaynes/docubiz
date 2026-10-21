@@ -15,6 +15,12 @@ if ($displayName === "") {
     $displayName = "Jana Lei Lumbreras";
 }
 $avatarText = strtoupper(substr($displayName, 0, 2));
+
+// Kunin ang role ng user mula sa session para sa role-based access control
+$userRoleSession = strtolower(trim($_SESSION["user_role"] ?? $_SESSION["role"] ?? "user"));
+$isAdmin = ($userRoleSession === "admin");
+$displayRole = $isAdmin ? "Admin Staff" : "User";
+
 function settingsEscape($value) {
     return htmlspecialchars((string)$value, ENT_QUOTES, "UTF-8");
 }
@@ -116,6 +122,7 @@ function settingsEscape($value) {
       display: flex;
       align-items: center;
       opacity: 0.9;
+      text-decoration: none;
     }
     .icon-btn:hover {
       opacity: 1;
@@ -154,7 +161,7 @@ function settingsEscape($value) {
     .main-body {
       display: flex;
       flex: 1;
-      align-items: stretch; /* Sinisigurong sasagad ang height ng buong body content hanggang sa ibaba */
+      align-items: stretch;
     }
     .sidebar {
       width: 210px;
@@ -185,23 +192,19 @@ function settingsEscape($value) {
       color: #ffffff;
       background-color: #274b73;
     }
-
-    /* Content Area - Inalis ang malaking gap para lumapit sa left sidebar */
     .content-area {
       flex: 1;
-      padding: 25px 20px 25px 15px; /* Inilapit sa kaliwa */
+      padding: 25px 20px 25px 15px;
       background-color: #d5dad9;
       display: flex;
-      gap: 15px; /* Pinaliit ang espasyo sa pagitan ng sub-sidebar at ng main content */
+      gap: 15px;
     }
-
-    /* Settings Sub-sidebar - Ginawang sakop ang buong taas mula itaas hanggang ibaba */
     .settings-subsidebar {
       width: 210px;
       background-color: #122b49;
       border-radius: 12px;
       padding: 15px 0;
-      align-self: stretch; /* Sagad mula taas hanggang sa pinaka-ibaba ng container */
+      align-self: stretch;
       display: flex;
       flex-direction: column;
       gap: 4px;
@@ -226,8 +229,6 @@ function settingsEscape($value) {
       color: #ffffff;
       background-color: #274b73;
     }
-
-    /* Settings Main Content */
     .settings-main {
       flex: 1;
       min-width: 0;
@@ -243,7 +244,6 @@ function settingsEscape($value) {
       color: #64748b;
       margin-bottom: 20px;
     }
-
     .settings-card {
       background-color: #ffffff;
       border-radius: 12px;
@@ -268,8 +268,6 @@ function settingsEscape($value) {
       color: #64748b;
       margin-bottom: 18px;
     }
-    
-    /* Button Styles */
     .btn-edit {
       background-color: #72dbd9;
       color: #1a365d;
@@ -296,8 +294,6 @@ function settingsEscape($value) {
       align-items: center;
       gap: 6px;
     }
-
-    /* Profile Row inside Account Info */
     .profile-display-row {
       display: flex;
       align-items: center;
@@ -340,8 +336,6 @@ function settingsEscape($value) {
       font-size: 0.75rem;
       color: #64748b;
     }
-
-    /* Info Grid */
     .info-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -358,7 +352,6 @@ function settingsEscape($value) {
       font-weight: 500;
       color: #334155;
     }
-
     @media (max-width: 900px) {
       .sidebar { width: 60px; }
       .sidebar .menu-item span { display: none; }
@@ -368,7 +361,6 @@ function settingsEscape($value) {
   </style>
 </head>
 <body>
-
   <div class="app-layout">
     <header class="topbar">
       <div class="brand-container">
@@ -377,22 +369,19 @@ function settingsEscape($value) {
         </button>
         <span class="brand-name">DocuBiz</span>
       </div>
-
       <div class="search-bar">
         <input type="text" placeholder="Search settings...">
         <button type="button" class="search-btn">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
         </button>
       </div>
-
       <div class="topbar-actions">
         <a href="settings.php" class="icon-btn" title="Settings">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         </a>
         <button class="icon-btn" title="Notifications">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
         </button>
-
         <div class="user-profile">
           <div class="profile-avatar">
             <?php echo settingsEscape($avatarText); ?>
@@ -401,12 +390,11 @@ function settingsEscape($value) {
             <span class="user-name">
               <?php echo settingsEscape($displayName); ?>
             </span>
-            <span class="user-role">Admin Staff</span>
+            <span class="user-role"><?php echo settingsEscape($displayRole); ?></span>
           </div>
         </div>
       </div>
     </header>
-
     <div class="main-body">
       <aside class="sidebar">
         <nav class="sidebar-menu">
@@ -434,19 +422,23 @@ function settingsEscape($value) {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
             <span>Documents</span>
           </a>
+          
+          <!-- Conditional: Ipapakita lamang ang Staff Management kapag Admin ang naka-login -->
+          <?php if ($isAdmin): ?>
           <a href="staff_management.php" class="menu-item">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
             <span>Staff Management</span>
           </a>
+          <?php endif; ?>
+
           <a href="finances.php" class="menu-item">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
             <span>Finances</span>
           </a>
         </nav>
       </aside>
-
       <main class="content-area">
-        <!-- Settings Sub-sidebar Menu (Sagad sa baba at malapit sa kaliwang sidebar) -->
+        <!-- Settings Sub-sidebar Menu -->
         <div class="settings-subsidebar">
           <a href="#" class="sub-menu-item active">Account</a>
           <a href="#" class="sub-menu-item">Notifications</a>
@@ -455,11 +447,9 @@ function settingsEscape($value) {
           <a href="#" class="sub-menu-item">System</a>
           <a href="#" class="sub-menu-item">About</a>
         </div>
-
         <div class="settings-main">
           <h1 class="page-title">Settings</h1>
           <p class="page-subtitle">Manage your account, preferences, and system configurations.</p>
-
           <!-- Account Information Card -->
           <div class="settings-card">
             <div class="card-title-row">
@@ -475,12 +465,11 @@ function settingsEscape($value) {
               </div>
               <div class="profile-user-details">
                 <h4><?php echo settingsEscape($displayName); ?></h4>
-                <p>Staff Admin</p>
+                <p><?php echo settingsEscape($displayRole); ?></p>
                 <p style="font-size: 0.7rem; color: #94a3b8;">Party Hub, Langkaan Branch</p>
               </div>
             </div>
           </div>
-
           <!-- Personal Information Card -->
           <div class="settings-card">
             <div class="card-title-row">
@@ -506,7 +495,6 @@ function settingsEscape($value) {
               </div>
             </div>
           </div>
-
           <!-- Address Card -->
           <div class="settings-card">
             <div class="card-title-row">
@@ -528,11 +516,9 @@ function settingsEscape($value) {
               </div>
             </div>
           </div>
-
         </div>
       </main>
     </div>
   </div>
-
 </body>
 </html>
