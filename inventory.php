@@ -169,7 +169,14 @@ function inventoryPageUrl($pageNumber, $search, $categoryFilter, $locationFilter
 <?php if ($isAdmin): ?>
 <a href="staff_management.php" class="menu-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>Staff Management</span></a>
 <?php endif; ?>
-<a href="finances.php" class="menu-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg><span>Finances</span></a>
+
+<?php if ($isAdmin): ?>
+<a href="finances.php" class="menu-item">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+    <span>Finances</span>
+</a>
+<?php endif; ?>
+
 </nav></aside>
 <main class="content-area">
 <div class="page-header"><h1 class="page-title">Inventory</h1><div class="action-buttons">

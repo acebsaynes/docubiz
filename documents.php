@@ -1,5 +1,6 @@
 <?php
 session_start();
+
 if (!isset($_SESSION["user_id"])) {
     header("Location: login.php");
     exit;
@@ -7,11 +8,12 @@ if (!isset($_SESSION["user_id"])) {
 
 // Kunin ang mga kinakailangang impormasyon mula sa Session
 $userEmail = $_SESSION["user_email"] ?? $_SESSION["email"] ?? "user@gmail.com";
-$userName  = $_SESSION["user_name"]  ?? $_SESSION["full_name"] ?? $userEmail;
+$userName  = $_SESSION["user_name"] ?? $_SESSION["full_name"] ?? $userEmail;
 
 // Tukuyin ang Role ("Admin Staff" kung admin, "User" kung hindi)
 $userRoleSession = strtolower(trim($_SESSION["user_role"] ?? $_SESSION["role"] ?? "user"));
 $displayRole = ($userRoleSession === "admin") ? "Admin Staff" : "User";
+$isAdmin = ($userRoleSession === "admin");
 
 // Kumuha ng Initials mula sa Name o Email
 $nameParts = preg_split('/\s+/', trim($userName));
@@ -346,25 +348,35 @@ $avatarInitials = count($nameParts) >= 2
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
             <span>Inventory</span>
           </a>
-          <a href="documents.php" class="menu-item active">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-            <span>Documents</span>
-          </a>
-         <?php if ($userRoleSession === "admin"): ?>
-<a href="staff_management.php" class="menu-item">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-        <circle cx="9" cy="7" r="4"></circle>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-    </svg>
-    <span>Staff Management</span>
+      <a href="documents.php" class="menu-item active">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+    <polyline points="14 2 14 8 20 8"></polyline>
+  </svg>
+  <span>Documents</span>
 </a>
-<?php endif; ?>
+
+          <?php if ($isAdmin): ?>
+          <a href="staff_management.php" class="menu-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+            <span>Staff Management</span>
+          </a>
+          <?php endif; ?>
+
+          <?php if ($isAdmin): ?>
           <a href="finances.php" class="menu-item">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
             <span>Finances</span>
           </a>
+          <?php endif; ?>
+
         </nav>
       </aside>
       <main class="content-area">

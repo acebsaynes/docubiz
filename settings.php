@@ -1,3 +1,4 @@
+
 <?php
 session_start();
 if (!isset($_SESSION["user_id"])) {
@@ -192,25 +193,26 @@ function settingsEscape($value) {
       color: #ffffff;
       background-color: #274b73;
     }
-    .content-area {
-      flex: 1;
-      padding: 25px 20px 25px 15px;
-      background-color: #d5dad9;
-      display: flex;
-      gap: 15px;
-    }
+  .content-area {
+  flex: 1;
+  padding: 25px 20px 0 15px;
+  background-color: #d5dad9;
+  display: flex;
+  gap: 15px;
+  align-items: stretch;
+}
     .settings-subsidebar {
-      width: 210px;
-      background-color: #122b49;
-      border-radius: 12px;
-      padding: 15px 0;
-      align-self: stretch;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      overflow: hidden;
-      flex-shrink: 0;
-    }
+  width: 210px;
+  background-color: #122b49;
+  border-radius: 12px 12px 0 0;
+  padding: 15px 0;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
     .sub-menu-item {
       display: flex;
       align-items: center;
@@ -377,7 +379,7 @@ function settingsEscape($value) {
       </div>
       <div class="topbar-actions">
         <a href="settings.php" class="icon-btn" title="Settings">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0l-.06.06a2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         </a>
         <button class="icon-btn" title="Notifications">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
@@ -431,21 +433,23 @@ function settingsEscape($value) {
           </a>
           <?php endif; ?>
 
+          <?php if ($isAdmin): ?>
           <a href="finances.php" class="menu-item">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
             <span>Finances</span>
           </a>
+          <?php endif; ?>
         </nav>
       </aside>
       <main class="content-area">
         <!-- Settings Sub-sidebar Menu -->
         <div class="settings-subsidebar">
-          <a href="#" class="sub-menu-item active">Account</a>
-          <a href="#" class="sub-menu-item">Notifications</a>
-          <a href="#" class="sub-menu-item">Appearance</a>
-          <a href="#" class="sub-menu-item">Security</a>
-          <a href="#" class="sub-menu-item">System</a>
-          <a href="#" class="sub-menu-item">About</a>
+          <a href="settings.php" class="sub-menu-item active">Account</a>
+          <a href="settings_notif.php" class="sub-menu-item">Notifications</a>
+          <a href="settings_appearance.php" class="sub-menu-item">Appearance</a>
+          <a href="settings_secu.php" class="sub-menu-item">Security</a>
+          <a href="settings_system.php" class="sub-menu-item">System</a>
+          <a href="settings_about.php" class="sub-menu-item">About</a>
         </div>
         <div class="settings-main">
           <h1 class="page-title">Settings</h1>

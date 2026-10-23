@@ -17,6 +17,7 @@ if ($displayName === "") {
 $avatarText = strtoupper(substr($displayName, 0, 2));
 // Kunin ang role mula sa session, default ay "user" kung walang naka-set
 $userRoleSession = strtolower(trim($_SESSION["user_role"] ?? $_SESSION["role"] ?? "user"));
+$isAdmin = ($userRoleSession === "admin");
 $displayRole = ($userRoleSession === "admin") ? "Admin Staff" : "User";
 function messagesEscape($value) {
     return htmlspecialchars((string)$value, ENT_QUOTES, "UTF-8");
@@ -83,12 +84,7 @@ function messagesEscape($value) {
       gap: 20px;
       margin-left: auto;
     }
-    .topbar-search-icon {
-      color: #9bb3d1;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-    }
+    
     .icon-btn {
       background: none;
       border: none;
@@ -458,9 +454,6 @@ function messagesEscape($value) {
         <span class="brand-name">DocuBiz</span>
       </div>
       <div class="topbar-right-actions">
-        <div class="topbar-search-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-        </div>
         
       
         <a href="settings.php" class="icon-btn" title="Settings">
@@ -524,10 +517,14 @@ function messagesEscape($value) {
               <span>Staff Management</span>
           </a>
         <?php endif; ?>
-          <a href="finances.php" class="menu-item">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
-            <span>Finances</span>
-          </a>
+          
+<?php if ($isAdmin): ?>
+<a href="finances.php" class="menu-item">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+    <span>Finances</span>
+</a>
+<?php endif; ?>
+
         </nav>
       </aside>
       <main class="content-area">
