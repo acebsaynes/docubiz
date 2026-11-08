@@ -21,7 +21,7 @@ if (!isset($conn) || !($conn instanceof mysqli)) {
     exit('Database connection is unavailable. Please check db.php.');
 }
 $userId = (int) $_SESSION['user_id'];
-/* Keep the profile and role consistent with the existing users table. */
+
 $userStmt = $conn->prepare('SELECT full_name, email, role FROM users WHERE id = ? LIMIT 1');
 if (!$userStmt) {
     error_log('Finance user query prepare failed: ' . $conn->error);
@@ -56,7 +56,7 @@ $nameParts = preg_split('/\s+/', trim($userName));
 $avatarInitials = count($nameParts) >= 2
     ? strtoupper(substr($nameParts[0], 0, 1) . substr(end($nameParts), 0, 1))
     : strtoupper(substr($userName, 0, 2));
-/* These tables are created once automatically in the existing docubiz_db database. */
+
 $schemaSql = [
     "CREATE TABLE IF NOT EXISTS finance_ledgers (
         id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -396,7 +396,6 @@ $tabLabels = ['general'=>'General Ledger','sales'=>'Sales Ledger','purchase'=>'P
       font-weight: 600;
       letter-spacing: -0.5px;
     }
-    /* Pinaliit na ang lapad ng search bar dito */
     .search-bar {
       position: relative;
       width: 330px;
@@ -476,7 +475,6 @@ $tabLabels = ['general'=>'General Ledger','sales'=>'Sales Ledger','purchase'=>'P
       font-size: 0.72rem;
       color: #9bb3d1;
     }
-    /* Matches the Log Out link styling from the dashboard. */
     .logout-link {
       color: #ffffff;
       text-decoration: none;

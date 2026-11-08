@@ -15,7 +15,7 @@ if ($displayName === "") {
     $displayName = "User";
 }
 $avatarText = strtoupper(substr($displayName, 0, 2));
-// Kunin ang role mula sa session, default ay "user" kung walang naka-set
+// Gets role session
 $userRoleSession = strtolower(trim($_SESSION["user_role"] ?? $_SESSION["role"] ?? "user"));
 $isAdmin = ($userRoleSession === "admin");
 $displayRole = ($userRoleSession === "admin") ? "Admin Staff" : "User";
@@ -93,7 +93,7 @@ function messagesEscape($value) {
       display: flex;
       align-items: center;
       opacity: 0.9;
-      text-decoration: none; /* Idinagdag para sa link */
+      text-decoration: none;
     }
     .icon-btn:hover {
       opacity: 1;
@@ -129,7 +129,6 @@ function messagesEscape($value) {
       font-size: 0.72rem;
       color: #9bb3d1;
     }
-    /* Estilo para sa Log Out button (normal font weight at may space) */
     .logout-btn {
       color: #ffffff;
       text-decoration: none;

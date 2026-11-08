@@ -6,16 +6,16 @@ if (!isset($_SESSION["user_id"])) {
     exit;
 }
 
-// Kunin ang mga kinakailangang impormasyon mula sa Session
+// Get session information
 $userEmail = $_SESSION["user_email"] ?? $_SESSION["email"] ?? "user@gmail.com";
 $userName  = $_SESSION["user_name"] ?? $_SESSION["full_name"] ?? $userEmail;
 
-// Tukuyin ang Role ("Admin Staff" kung admin, "User" kung hindi)
+// Checks user role
 $userRoleSession = strtolower(trim($_SESSION["user_role"] ?? $_SESSION["role"] ?? "user"));
 $displayRole = ($userRoleSession === "admin") ? "Admin Staff" : "User";
 $isAdmin = ($userRoleSession === "admin");
 
-// Kumuha ng Initials mula sa Name o Email
+// Get user initials
 $nameParts = preg_split('/\s+/', trim($userName));
 $avatarInitials = count($nameParts) >= 2
     ? strtoupper(substr($nameParts[0], 0, 1) . substr(end($nameParts), 0, 1))

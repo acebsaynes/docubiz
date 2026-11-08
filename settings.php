@@ -17,7 +17,7 @@ if ($displayName === "") {
 }
 $avatarText = strtoupper(substr($displayName, 0, 2));
 
-// Kunin ang role ng user mula sa session para sa role-based access control
+// Gets user session role
 $userRoleSession = strtolower(trim($_SESSION["user_role"] ?? $_SESSION["role"] ?? "user"));
 $isAdmin = ($userRoleSession === "admin");
 $displayRole = $isAdmin ? "Admin Staff" : "User";
@@ -425,7 +425,6 @@ function settingsEscape($value) {
             <span>Documents</span>
           </a>
           
-          <!-- Conditional: Ipapakita lamang ang Staff Management kapag Admin ang naka-login -->
           <?php if ($isAdmin): ?>
           <a href="staff_management.php" class="menu-item">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>

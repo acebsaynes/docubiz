@@ -43,7 +43,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 if (!$stmt) {
                     $message = "Could not create your account.";
                 } else {
-                    // Use email as the temporary display name.
+                    // Email as the temporary display name
                     $fullName = $email;
 
                     $stmt->bind_param(

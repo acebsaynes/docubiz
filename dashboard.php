@@ -1,6 +1,6 @@
 <?php
 session_start();
-// Use Philippine local time for the dashboard calendar.
+// Philippine local time for dashboard calendar
 date_default_timezone_set("Asia/Manila");
 if (!isset($_SESSION["user_id"])) {
     header("Location: login.php");
@@ -43,7 +43,7 @@ if (!$userFound || !in_array($dbRole, ["admin", "user"], true)) {
     header("Location: login.php");
     exit;
 }
-/* Keep the session information synchronized with the database. */
+/* Keeps the session information synchronized with the database. */
 $_SESSION["user_role"] = $dbRole;
 $_SESSION["role"] = $dbRole;
 $_SESSION["user_name"] = $dbFullName;
@@ -99,12 +99,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         exit;
     }
 }
-/* One-time message after adding or deleting a task. */
+/* One-time message after adding or deleting a task */
 if (isset($_SESSION["task_message"])) {
     $taskMessage = $_SESSION["task_message"];
     unset($_SESSION["task_message"]);
 }
-/* Get the logged-in user's tasks. */
+/* Get the logged-in user's tasks */
 $userTasks = [];
 $stmt = $conn->prepare(
     "SELECT id, task_title, deadline
@@ -121,7 +121,7 @@ if ($stmt) {
     }
     $stmt->close();
 }
-/* Get upcoming events from the database. */
+/* Get upcoming events from the database */
 $upcomingEvents = [];
 $sql = "SELECT event_name, event_date, start_time, event_type,
                location, description, notes
@@ -135,7 +135,7 @@ if ($eventsResult) {
         $upcomingEvents[] = $event;
     }
 }
-/* Build the mini calendar from the current date and saved events. */
+/* Build the mini calendar from the current date and saved events */
 $calendarToday = new DateTimeImmutable("today");
 $calendarYear = (int) $calendarToday->format("Y");
 $calendarMonth = (int) $calendarToday->format("n");
@@ -179,7 +179,7 @@ if ($calendarStmt) {
     }
     $calendarStmt->close();
 }
-/* Get logged-in user's display name. */
+/* Get logged-in user's display name */
 $displayName = trim($_SESSION["user_name"] ?? "");
 if ($displayName === "") {
     $displayName = trim($_SESSION["full_name"] ?? "");
@@ -190,7 +190,7 @@ if ($displayName === "") {
 if ($displayName === "") {
     $displayName = "User";
 }
-/* Generate avatar initials. */
+/* Generate avatar initials */
 $nameParts = preg_split('/\s+/', $displayName);
 $avatarText = "";
 if (count($nameParts) >= 2) {

@@ -14,7 +14,6 @@ $currentYear = date("Y");
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   
   <style>
-    /* Smooth Scrolling */
     html {
       scroll-behavior: smooth;
     }
@@ -33,7 +32,6 @@ $currentYear = date("Y");
       overflow-x: hidden;
     }
 
-    /* Fixed Navigation Bar */
     .navbar {
       position: fixed;
       top: 0;
@@ -101,7 +99,7 @@ $currentYear = date("Y");
       justify-content: center;
     }
 
-    /* 1. HOME SECTION */
+    /* HOME SECTION */
     #home {
       margin-top: 60px;
       background: linear-gradient(180deg, #122b49 0%, #a2caf8 40%, #c1e2fb 100%);
@@ -185,7 +183,7 @@ $currentYear = date("Y");
       align-items: center;
     }
 
-    /* 2. FEATURES SECTION */
+    /* FEATURES SECTION */
     #features {
       background-color: #ffffff;
       padding: 40px;
@@ -241,7 +239,7 @@ $currentYear = date("Y");
       line-height: 1.4;
     }
 
-    /* 3. ABOUT SECTION - Pinalaki at pinaganda ang readability ng mga teksto */
+    /* ABOUT SECTION */
     #about {
       background-color: #ffffff;
       padding: 0;
@@ -302,7 +300,6 @@ $currentYear = date("Y");
       z-index: 3;
     }
 
-    /* Mas malaki at madaling basahin na font size */
     .about-container p {
       font-size: 1.12rem;
       color: #1e293b;
@@ -310,7 +307,7 @@ $currentYear = date("Y");
       font-weight: 400;
     }
 
-    /* 4. CONTACT SECTION */
+    /* CONTACT SECTION */
     #contact {
       background-color: #ffffff;
       padding-top: 15px;
@@ -547,7 +544,7 @@ $currentYear = date("Y");
     <a href="login.php" class="btn-login">Log In</a>
   </nav>
 
-  <!-- 1. HOME SECTION -->
+  <!-- HOME SECTION -->
   <section id="home">
     <div class="home-container">
       <div class="home-content">
@@ -561,7 +558,7 @@ $currentYear = date("Y");
           <div class="pill">📁 Schedule Projects</div>
         </div>
 
-        <a href="#features" class="btn-get-started">Get Started &rarr;</a>
+        <a href="signup.php" class="btn-get-started">Get Started &rarr;</a>
       </div>
       <div class="home-illustration">
         <svg width="420" height="310" viewBox="0 0 520 380" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -589,7 +586,7 @@ $currentYear = date("Y");
     </div>
   </section>
 
-  <!-- 2. FEATURES SECTION -->
+  <!-- FEATURES SECTION -->
   <section id="features">
     <h2 class="section-title">Features</h2>
     <div class="features-grid">
@@ -626,7 +623,7 @@ $currentYear = date("Y");
     </div>
   </section>
 
-  <!-- 3. ABOUT SECTION - Pinalaki at pinagitna ang mga teksto -->
+  <!-- ABOUT SECTION -->
   <section id="about">
     <div class="about-top-banner">
       <h2>About</h2>
@@ -668,7 +665,7 @@ $currentYear = date("Y");
     </div>
   </section>
 
-  <!-- 4. CONTACT US SECTION -->
+  <!-- CONTACT US SECTION -->
   <section id="contact">
     <div class="contact-wrapper">
       <div class="contact-info">

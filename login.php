@@ -81,7 +81,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       font-family: 'Poppins', sans-serif;
       background: linear-gradient(135deg, #0052D4, #4364F7, #6FB1FC);
       height: 100vh;
-      overflow: hidden; /* Tinanggal ang scrollbar ng buong pahina */
+      overflow: hidden;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -112,11 +112,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     .login-card {
       background: #ffffff;
-      padding: 28px 32px; /* Pinababa ang padding para hindi masyadong matangkad */
+      padding: 28px 32px;
       border-radius: 16px;
       box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
       width: 100%;
-      max-width: 400px; /* Mas pinakitid nang konti */
+      max-width: 400px;
       margin-left: auto;
     }
 

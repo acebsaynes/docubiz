@@ -36,10 +36,9 @@ if ($displayName === "") {
 
 
 
-// Kunin ang role mula sa session, default ay "user" kung walang naka-set
+// Gets user session role
 
 $userRoleSession = strtolower(trim($_SESSION["user_role"] ?? $_SESSION["role"] ?? "user"));
-
 $displayRole = ($userRoleSession === "admin") ? "Admin Staff" : "User";
 
 
