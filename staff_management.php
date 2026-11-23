@@ -349,7 +349,9 @@ body {
 }
 .staff-table tbody tr { cursor: pointer; transition: background-color .15s ease; }
 .staff-table tbody tr:hover { background: #f1f5f9; }
-.staff-row-highlight { background: #b2f5ea; }
+.staff-row-highlight { background: #f7fafc; }
+.staff-table tbody tr.row-selected,
+.staff-table tbody tr.row-selected:hover { background: #cfeeea; }
 .staff-info-cell { display: flex; align-items: center; gap: 12px; min-width: 220px; }
 .staff-avatar {
     width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%;
@@ -834,6 +836,11 @@ function updateSelectionDisplay() {
         visibleRows.every(row => row.querySelector(".staff-checkbox").checked);
 
     selectAll.indeterminate = checked.length > 0 && !selectAll.checked;
+
+        allRows.forEach(row => {
+        const checkbox = row.querySelector(".staff-checkbox");
+        row.classList.toggle("row-selected", !!checkbox && checkbox.checked);
+    });
 }
 
 searchInput.addEventListener("input", updateTable);
