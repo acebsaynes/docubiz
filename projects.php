@@ -41,6 +41,9 @@ if ($displayName === "") {
 $userRoleSession = strtolower(trim($_SESSION["user_role"] ?? $_SESSION["role"] ?? "user"));
 $displayRole = ($userRoleSession === "admin") ? "Admin Staff" : "User";
 
+// Only admins may add, edit, or delete projects
+$isAdmin = ($userRoleSession === "admin");
+
 
 
 $avatarText = strtoupper(substr($displayName, 0, 2));
@@ -70,6 +73,17 @@ $error = "";
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
           $action = $_POST["action"] ?? "";
+
+          if (!$isAdmin) {
+
+                    // Non-admins are read-only: block add/update/delete even if the request is forged
+                    http_response_code(403);
+
+                    $error = "Only admins can add, edit, or delete projects.";
+
+                    $action = "";
+
+          }
 
           if ($action === "add" || $action === "update") {
 
@@ -239,7 +253,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                                                                 guest_count = ?, event_time = ?
 
-                                                                WHERE id = ? AND user_id = ?"
+                                                                WHERE id = ?"
 
                                                   );
 
@@ -247,7 +261,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                                                             $stmt->bind_param(
 
-                                                                      "ssssssssissii",
+                                                                      "ssssssssissi",
 
                                                                       $projectName,
 
@@ -271,9 +285,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                                                                       $eventTime,
 
-                                                                      $projectId,
-
-                                                                      $userId
+                                                                      $projectId
 
                                                             );
 
@@ -311,13 +323,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                               $stmt = $conn->prepare(
 
-                                        "DELETE FROM projects WHERE id = ? AND user_id = ?"
+                                        "DELETE FROM projects WHERE id = ?"
 
                               );
 
                               if ($stmt) {
 
-                                        $stmt->bind_param("ii", $projectId, $userId);
+                                        $stmt->bind_param("i", $projectId);
 
                                         if ($stmt->execute()) {
 
@@ -946,7 +958,9 @@ body{background-color:#d8dcdb;color:#333;min-height:100vh}
 
                          </div>
 
+                         <?php if ($isAdmin): ?>
                          <button type="button" class="primary-btn" id="addProjectBtn">+ Add Project</button>
+                         <?php endif; ?>
 
                     </div>
 
@@ -960,7 +974,7 @@ body{background-color:#d8dcdb;color:#333;min-height:100vh}
 
                          <?php if (empty($projects)): ?>
 
-                              <tr id="emptyProjectsRow"><td colspan="7" class="empty-row">No projects yet. Click “Add Project” to create your first one.</td></tr>
+                              <tr id="emptyProjectsRow"><td colspan="7" class="empty-row"><?php echo $isAdmin ? "No projects yet. Click “Add Project” to create your first one." : "No projects yet."; ?></td></tr>
 
                          <?php else: ?>
 
@@ -993,7 +1007,7 @@ body{background-color:#d8dcdb;color:#333;min-height:100vh}
                                         <td>
 
                                              <div class="action-buttons">
-                    <?php if ((int)$project["user_id"] === $userId): ?>
+                    <?php if ($isAdmin): ?>
                       <button type="button" class="small-btn edit-btn" data-project="<?php echo projectsEscape(json_encode($project, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP)); ?>">Edit</button>
                       <form method="POST" onsubmit="return confirm('Are you sure you want to delete this project?');">
                         <input type="hidden" name="action" value="delete">
@@ -1120,7 +1134,8 @@ body{background-color:#d8dcdb;color:#333;min-height:100vh}
 
 </div>
 
-<!-- ADD / EDIT PROJECT MODAL -->
+<!-- ADD / EDIT PROJECT MODAL (admin only) -->
+<?php if ($isAdmin): ?>
 
 <div class="modal-overlay" id="projectModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
 
@@ -1269,6 +1284,7 @@ body{background-color:#d8dcdb;color:#333;min-height:100vh}
      </div>
 
 </div>
+<?php endif; ?>
 
 <script>
 
@@ -1277,6 +1293,7 @@ const modal = document.getElementById("projectModal");
 const projectForm = document.getElementById("projectForm");
 
 function openModal() {
+     if (!modal) return;
 
      modal.classList.add("open");
 
@@ -1285,6 +1302,7 @@ function openModal() {
 }
 
 function closeModal() {
+     if (!modal) return;
 
      modal.classList.remove("open");
 
@@ -1292,6 +1310,7 @@ function closeModal() {
 
 }
 
+if (modal) {
 document.getElementById("addProjectBtn").addEventListener("click", function () {
 
      projectForm.reset();
@@ -1375,6 +1394,7 @@ document.querySelectorAll(".edit-btn").forEach(function (button) {
      });
 
 });
+}
 
 /* SEARCH AND FILTER PROJECTS */
 
