@@ -68,299 +68,8 @@ $message = "";
 
 $error = "";
 
-/* ADD, UPDATE, AND DELETE PROJECTS */
-
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
-
-          $action = $_POST["action"] ?? "";
-
-          if (!$isAdmin) {
-
-                    // Non-admins are read-only: block add/update/delete even if the request is forged
-                    http_response_code(403);
-
-                    $error = "Only admins can add, edit, or delete projects.";
-
-                    $action = "";
-
-          }
-
-          if ($action === "add" || $action === "update") {
-
-                    $projectName = trim($_POST["project_name"] ?? "");
-
-                    $clientName = trim($_POST["client_name"] ?? "");
-
-                    $eventType = trim($_POST["event_type"] ?? "Catering Event");
-
-                    $location = trim($_POST["location"] ?? "");
-
-                    $description = trim($_POST["description"] ?? "");
-
-                    $startDate = $_POST["start_date"] ?? "";
-
-                    $dueDate = $_POST["due_date"] ?? "";
-
-                    $eventTime = $_POST["event_time"] ?? "";
-
-                    $guestCount = $_POST["guest_count"] ?? "";
-
-                    $status = $_POST["status"] ?? "Planned";
-
-                    $progress = filter_var(
-
-                              $_POST["progress"] ?? 0,
-
-                              FILTER_VALIDATE_INT
-
-                    );
-
-                    $validStatuses = ["Planned", "In Progress", "Completed", "On Hold"];
-
-                    if (
-
-                              $projectName === "" ||
-
-                              !in_array($status, $validStatuses, true) ||
-
-                              $progress === false ||
-
-                              $progress < 0 ||
-
-                              $progress > 100
-
-                    ) {
-
-                              $error = "Please enter a project name and valid project details.";
-
-                    } elseif (
-
-                              ($startDate !== "" && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate)) ||
-
-                              ($dueDate !== "" && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dueDate)) ||
-
-                              ($eventTime !== "" && !preg_match('/^\d{2}:\d{2}$/', $eventTime)) ||
-
-                              ($guestCount !== "" && (!ctype_digit($guestCount) || (int)$guestCount < 0))
-
-                    ) {
-
-                              $error = "Please check the date, time, and guest count.";
-
-                    } else {
-
-                              if ($startDate === "") $startDate = null;
-
-                              if ($dueDate === "") $dueDate = null;
-
-                              if ($eventTime === "") $eventTime = null;
-
-                              if ($guestCount === "") $guestCount = null;
-
-                              if ($clientName === "") $clientName = null;
-
-                              if ($location === "") $location = null;
-
-                              if ($description === "") $description = null;
-
-                              if ($action === "add") {
-
-                                        $stmt = $conn->prepare(
-
-                                                  "INSERT INTO projects
-
-                                                  (user_id, project_name, client_name, description,
-
-                                                      start_date, due_date, status, event_type, location,
-
-                                                      progress, guest_count, event_time)
-
-                                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-
-                                        );
-
-                                        if ($stmt) {
-
-                                                  $stmt->bind_param(
-
-                                                            "issssssssiss",
-
-                                                            $userId,
-
-                                                            $projectName,
-
-                                                            $clientName,
-
-                                                            $description,
-
-                                                            $startDate,
-
-                                                            $dueDate,
-
-                                                            $status,
-
-                                                            $eventType,
-
-                                                            $location,
-
-                                                            $progress,
-
-                                                            $guestCount,
-
-                                                            $eventTime
-
-                                                  );
-
-                                                  if ($stmt->execute()) {
-
-                                                            $stmt->close();
-
-                                                            redirectProjects();
-
-                                                  } else {
-
-                                                            $error = "Unable to save the project. Please try again.";
-
-                                                  }
-
-                                                  $stmt->close();
-
-                                        } else {
-
-                                                  $error = "Unable to prepare the project request.";
-
-                                        }
-
-                              } else {
-
-                                        $projectId = filter_input(INPUT_POST, "project_id", FILTER_VALIDATE_INT);
-
-                                        if (!$projectId) {
-
-                                                  $error = "Invalid project selected.";
-
-                                        } else {
-
-                                                  $stmt = $conn->prepare(
-
-                                                            "UPDATE projects SET
-
-                                                                project_name = ?, client_name = ?, description = ?,
-
-                                                                start_date = ?, due_date = ?, status = ?,
-
-                                                                event_type = ?, location = ?, progress = ?,
-
-                                                                guest_count = ?, event_time = ?
-
-                                                                WHERE id = ?"
-
-                                                  );
-
-                                                  if ($stmt) {
-
-                                                            $stmt->bind_param(
-
-                                                                      "ssssssssissi",
-
-                                                                      $projectName,
-
-                                                                      $clientName,
-
-                                                                      $description,
-
-                                                                      $startDate,
-
-                                                                      $dueDate,
-
-                                                                      $status,
-
-                                                                      $eventType,
-
-                                                                      $location,
-
-                                                                      $progress,
-
-                                                                      $guestCount,
-
-                                                                      $eventTime,
-
-                                                                      $projectId
-
-                                                            );
-
-                                                            if ($stmt->execute()) {
-
-                                                                      $stmt->close();
-
-                                                                      redirectProjects();
-
-                                                            } else {
-
-                                                                      $error = "Unable to update the project.";
-
-                                                            }
-
-                                                            $stmt->close();
-
-                                                  } else {
-
-                                                            $error = "Unable to prepare the update request.";
-
-                                                  }
-
-                                        }
-
-                              }
-
-                    }
-
-          } elseif ($action === "delete") {
-
-                    $projectId = filter_input(INPUT_POST, "project_id", FILTER_VALIDATE_INT);
-
-                    if ($projectId) {
-
-                              $stmt = $conn->prepare(
-
-                                        "DELETE FROM projects WHERE id = ?"
-
-                              );
-
-                              if ($stmt) {
-
-                                        $stmt->bind_param("i", $projectId);
-
-                                        if ($stmt->execute()) {
-
-                                                  $stmt->close();
-
-                                                  redirectProjects();
-
-                                        } else {
-
-                                                  $error = "Unable to delete the project.";
-
-                                        }
-
-                                        $stmt->close();
-
-                              } else {
-
-                                        $error = "Unable to prepare the delete request.";
-
-                              }
-
-                    } else {
-
-                              $error = "Invalid project selected.";
-
-                    }
-
-          }
-
-}
-
+if (empty($_SESSION['project_csrf'])) $_SESSION['project_csrf'] = bin2hex(random_bytes(32));
+require __DIR__ . '/project_backend.php';
 /* GET SHARED PROJECTS FROM ALL USERS */
 
 $projects = [];
@@ -425,6 +134,7 @@ function projectStatusClass($status) {
                     case "In Progress": return "status-ongoing";
 
                     case "On Hold": return "status-hold";
+                    case "Cancelled": return "status-cancelled";
 
                     default: return "status-badge-upcoming";
 
@@ -678,7 +388,9 @@ body{background-color:#d8dcdb;color:#333;min-height:100vh}
 
 @media(max-width:650px){.topbar{padding:0 10px}.brand-container{width:auto;gap:8px}.brand-name{font-size:1.1rem}.search-bar{width:130px}.topbar-actions{gap:8px}.profile-info{display:none}.right-sidebar-section{display:flex}.content-area{padding:16px 10px}.projects-card,.card{padding:14px 12px}.project-form-grid{grid-template-columns:1fr}.form-field.full-width{grid-column:auto}.table-filter-bar{align-items:stretch}.table-search-input{max-width:none}.filters-group{justify-content:space-between}.project-tabs{gap:14px}}
 
+.status-cancelled{background:#fce3e3;color:#b23e3e;font-size:.68rem;font-weight:600;padding:3px 10px;border-radius:4px;display:inline-block}.project-title{cursor:pointer}
 </style>
+<link rel="stylesheet" href="project_modal.css">
 
 </head>
 
@@ -881,6 +593,7 @@ body{background-color:#d8dcdb;color:#333;min-height:100vh}
                          <button type="button" class="tab-btn" data-tab="Planned">Upcoming</button>
 
                          <button type="button" class="tab-btn" data-tab="Completed">Completed</button>
+                         <button type="button" class="tab-btn" data-tab="Cancelled">Cancelled</button>
 
                     </div>
 
@@ -909,6 +622,9 @@ body{background-color:#d8dcdb;color:#333;min-height:100vh}
                                         <option value="Birthday">Birthday</option>
 
                                         <option value="Wedding">Wedding</option>
+<option value="Debut">Debut</option>
+<option value="Kiddie Birthday">Kiddie Birthday</option>
+<option value="Adult Birthday">Adult Birthday</option>
 
                                         <option value="Corporate">Corporate</option>
 
@@ -935,6 +651,7 @@ body{background-color:#d8dcdb;color:#333;min-height:100vh}
                                         <option value="Completed">Completed</option>
 
                                         <option value="On Hold">On Hold</option>
+<option value="Cancelled">Cancelled</option>
 
                                    </select>
 
@@ -980,7 +697,7 @@ body{background-color:#d8dcdb;color:#333;min-height:100vh}
 
                               <?php foreach ($projects as $project): ?>
 
-                                   <tr class="project-row"
+                                   <tr class="project-row" data-project-id="<?= (int)$project['id'] ?>"
 
                                              data-name="<?php echo projectsEscape(strtolower($project["project_name"])); ?>"
 
@@ -992,7 +709,7 @@ body{background-color:#d8dcdb;color:#333;min-height:100vh}
 
                                              data-date="<?php echo projectsEscape($project["due_date"] ?? $project["start_date"] ?? ""); ?>">
 
-                                        <td><div class="project-name-cell"><span class="project-title"><?php echo projectsEscape($project["project_name"]); ?></span><span class="project-location"><?php echo projectsEscape($project["location"] ?: "Location not set"); ?></span></div></td>
+                                        <td><div class="project-name-cell"><button type="button" class="project-title db-view-link" data-view="<?= (int)$project['id'] ?>"><?php echo projectsEscape($project["project_name"]); ?></button><span class="project-location"><?php echo projectsEscape($project["location"] ?: "Location not set"); ?></span></div></td>
 
                                         <td><?php echo projectsEscape($project["client_name"] ?: "—"); ?></td>
 
@@ -1008,9 +725,10 @@ body{background-color:#d8dcdb;color:#333;min-height:100vh}
 
                                              <div class="action-buttons">
                     <?php if ($isAdmin): ?>
-                      <button type="button" class="small-btn edit-btn" data-project="<?php echo projectsEscape(json_encode($project, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP)); ?>">Edit</button>
+                      <button type="button" class="small-btn edit-btn" data-edit="<?= (int)$project['id'] ?>">Edit</button>
                       <form method="POST" onsubmit="return confirm('Are you sure you want to delete this project?');">
                         <input type="hidden" name="action" value="delete">
+<input type="hidden" name="csrf" value="<?= projectsEscape($_SESSION['project_csrf']) ?>">
                         <input type="hidden" name="project_id" value="<?php echo (int)$project["id"]; ?>">
                         <button type="submit" class="small-btn delete-btn">Delete</button>
                       </form>
@@ -1134,268 +852,8 @@ body{background-color:#d8dcdb;color:#333;min-height:100vh}
 
 </div>
 
-<!-- ADD / EDIT PROJECT MODAL (admin only) -->
-<?php if ($isAdmin): ?>
-
-<div class="modal-overlay" id="projectModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-
-     <div class="project-modal">
-
-          <div class="modal-heading">
-
-               <h2 id="modalTitle">Add Project</h2>
-
-               <button type="button" class="close-modal" id="closeModal" aria-label="Close">&times;</button>
-
-          </div>
-
-          <form method="POST" id="projectForm">
-
-               <input type="hidden" name="action" id="formAction" value="add">
-
-               <input type="hidden" name="project_id" id="projectId">
-
-               <div class="project-form-grid">
-
-                    <div class="form-field full-width">
-
-                         <label for="projectName">Project Name *</label>
-
-                         <input type="text" name="project_name" id="projectName" maxlength="150" required>
-
-                    </div>
-
-                    <div class="form-field">
-
-                         <label for="clientName">Client Name</label>
-
-                         <input type="text" name="client_name" id="clientName" maxlength="150">
-
-                    </div>
-
-                    <div class="form-field">
-
-                         <label for="eventType">Event Type</label>
-
-                         <select name="event_type" id="eventType">
-
-                              <option value="Catering Event">Catering Event</option>
-
-                              <option value="Birthday">Birthday</option>
-
-                              <option value="Wedding">Wedding</option>
-
-                              <option value="Corporate">Corporate</option>
-
-                              <option value="Meeting">Meeting</option>
-
-                              <option value="Other">Other</option>
-
-                         </select>
-
-                    </div>
-
-                    <div class="form-field">
-
-                         <label for="startDate">Start Date</label>
-
-                         <input type="date" name="start_date" id="startDate">
-
-                    </div>
-
-                    <div class="form-field">
-
-                         <label for="dueDate">Due / Event Date</label>
-
-                         <input type="date" name="due_date" id="dueDate">
-
-                    </div>
-
-                    <div class="form-field">
-
-                         <label for="eventTime">Event Time</label>
-
-                         <input type="time" name="event_time" id="eventTime">
-
-                    </div>
-
-                    <div class="form-field">
-
-                         <label for="guestCount">Number of Guests</label>
-
-                         <input type="number" name="guest_count" id="guestCount" min="0">
-
-                    </div>
-
-                    <div class="form-field">
-
-                         <label for="projectStatus">Status</label>
-
-                         <select name="status" id="projectStatus">
-
-                              <option value="Planned">Planned</option>
-
-                              <option value="In Progress">In Progress</option>
-
-                              <option value="Completed">Completed</option>
-
-                              <option value="On Hold">On Hold</option>
-
-                         </select>
-
-                    </div>
-
-                    <div class="form-field">
-
-                         <label for="progress">Progress (%)</label>
-
-                         <input type="number" name="progress" id="progress" min="0" max="100" value="0" required>
-
-                    </div>
-
-                    <div class="form-field full-width">
-
-                         <label for="location">Location</label>
-
-                         <input type="text" name="location" id="location" maxlength="255">
-
-                    </div>
-
-                    <div class="form-field full-width">
-
-                         <label for="description">Description / Notes</label>
-
-                         <textarea name="description" id="description" maxlength="5000"></textarea>
-
-                    </div>
-
-               </div>
-
-               <div class="form-actions">
-
-                    <button type="button" class="cancel-btn" id="cancelModal">Cancel</button>
-
-                    <button type="submit" class="primary-btn" id="saveProjectBtn">Save Project</button>
-
-               </div>
-
-          </form>
-
-     </div>
-
-</div>
-<?php endif; ?>
-
+<?php require __DIR__ . '/project_modal.php'; ?>
 <script>
-
-const modal = document.getElementById("projectModal");
-
-const projectForm = document.getElementById("projectForm");
-
-function openModal() {
-     if (!modal) return;
-
-     modal.classList.add("open");
-
-     document.body.style.overflow = "hidden";
-
-}
-
-function closeModal() {
-     if (!modal) return;
-
-     modal.classList.remove("open");
-
-     document.body.style.overflow = "";
-
-}
-
-if (modal) {
-document.getElementById("addProjectBtn").addEventListener("click", function () {
-
-     projectForm.reset();
-
-     document.getElementById("modalTitle").textContent = "Add Project";
-
-     document.getElementById("formAction").value = "add";
-
-     document.getElementById("projectId").value = "";
-
-     document.getElementById("progress").value = "0";
-
-     document.getElementById("saveProjectBtn").textContent = "Save Project";
-
-     openModal();
-
-});
-
-document.getElementById("closeModal").addEventListener("click", closeModal);
-
-document.getElementById("cancelModal").addEventListener("click", closeModal);
-
-modal.addEventListener("click", function (event) {
-
-     if (event.target === modal) closeModal();
-
-});
-
-document.querySelectorAll(".edit-btn").forEach(function (button) {
-
-     button.addEventListener("click", function () {
-
-          let project;
-
-          try {
-
-               project = JSON.parse(this.dataset.project);
-
-          } catch (error) {
-
-               alert("Unable to load this project for editing.");
-
-               return;
-
-          }
-
-          projectForm.reset();
-
-          document.getElementById("modalTitle").textContent = "Edit Project";
-
-          document.getElementById("formAction").value = "update";
-
-          document.getElementById("projectId").value = project.id;
-
-          document.getElementById("projectName").value = project.project_name || "";
-
-          document.getElementById("clientName").value = project.client_name || "";
-
-          document.getElementById("eventType").value = project.event_type || "Catering Event";
-
-          document.getElementById("startDate").value = project.start_date || "";
-
-          document.getElementById("dueDate").value = project.due_date || "";
-
-          document.getElementById("eventTime").value = project.event_time ? project.event_time.substring(0, 5) : "";
-
-          document.getElementById("guestCount").value = project.guest_count ?? "";
-
-          document.getElementById("projectStatus").value = project.status || "Planned";
-
-          document.getElementById("progress").value = project.progress ?? 0;
-
-          document.getElementById("location").value = project.location || "";
-
-          document.getElementById("description").value = project.description || "";
-
-          document.getElementById("saveProjectBtn").textContent = "Update Project";
-
-          openModal();
-
-     });
-
-});
-}
-
 /* SEARCH AND FILTER PROJECTS */
 
 const tableRows = Array.from(document.querySelectorAll(".project-row"));
@@ -1540,11 +998,7 @@ document.getElementById("viewUpcoming").addEventListener("click", function (even
 
 });
 
-document.addEventListener("keydown", function (event) {
 
-     if (event.key === "Escape") closeModal();
-
-});
 
 applyProjectFilters();
 
