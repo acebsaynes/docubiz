@@ -23,4 +23,4 @@
   <div class="db-actions"><button type="button" id="dbDisagree" class="db-outline">Disagree</button><button type="button" id="dbAgree" class="db-save">Agree</button></div>
 </dialog>
 <script type="application/json" id="dbConfig"><?= json_encode($projectConfig, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_INVALID_UTF8_SUBSTITUTE) ?></script>
-<script src="project_modal.js" defer></script>
+<script src="project_modal.js?v=<?= filemtime(__DIR__ . '/project_modal.js') ?>" defer></script>
