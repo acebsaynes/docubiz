@@ -370,7 +370,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             </button>
           </div>
           <div class="forgot-link-wrapper">
-            <a href="#" class="forgot-link">Forgot Password?</a>
+            <a href="forgot-password.php" class="forgot-link">Forgot Password?</a>
           </div>
         </div>
         <button type="submit" class="btn-submit">Log In</button>
