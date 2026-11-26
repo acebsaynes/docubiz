@@ -169,16 +169,37 @@
 }
 
 .comm .doc-table input[type="checkbox"] {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    width: 17px !important;
+    height: 17px !important;
+    border: 1px solid #a8b3bf !important;
+    border-radius: 3px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    display: inline-grid !important;
+    place-content: center;
+    padding: 0 !important;
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+.comm .doc-table input[type="checkbox"] {
     appearance: auto !important;
-    -webkit-appearance: checkbox !important;
+    -webkit-appearance: auto !important;
+    accent-color: auto !important;
     width: auto !important;
     height: auto !important;
     border: initial !important;
     border-radius: initial !important;
     background: initial !important;
     box-shadow: none !important;
-    display: inline-block;
-    padding: 0 !important;
+    padding: initial !important;
+    display: inline-block !important;
     cursor: pointer;
     vertical-align: middle;
+}
+
+.comm .doc-table input[type="checkbox"]::after {
+    content: none !important;
 }
