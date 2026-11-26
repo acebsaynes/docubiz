@@ -121,22 +121,31 @@ if ($stmt) {
     }
     $stmt->close();
 }
-/* Get upcoming events from the database */
-$upcomingEvents = [];
-$sql = "SELECT event_name, event_date, start_time, event_type,
-               location, description, notes
-        FROM events
-        WHERE event_date >= CURDATE()
-        ORDER BY event_date ASC, start_time ASC
-        LIMIT 5";
-$eventsResult = $conn->query($sql);
-if ($eventsResult) {
-    while ($event = $eventsResult->fetch_assoc()) {
-        $upcomingEvents[] = $event;
-    }
-}
-/* Build the mini calendar from the current date and saved events */
+/* Shared schedule: read the original events and projects, never duplicate them. */
+$scheduleSql = "SELECT id, 'event' AS source, event_name, event_date,
+                       start_time, event_type, location, description, NULL AS status
+                FROM events
+                UNION ALL
+                SELECT id, 'project' AS source, project_name AS event_name,
+                       COALESCE(due_date, start_date) AS event_date,
+                       event_time AS start_time, event_type, location, description, status
+                FROM projects";
 $calendarToday = new DateTimeImmutable("today");
+$today = $calendarToday->format("Y-m-d");
+$upcomingEvents = [];
+$scheduleError = false;
+$stmt = $conn->prepare("SELECT * FROM ($scheduleSql) AS schedule
+    WHERE event_date >= ? AND (status IS NULL OR status NOT IN ('Cancelled', 'Completed'))
+    ORDER BY event_date ASC, start_time IS NULL ASC, start_time ASC, source ASC, id ASC LIMIT 5");
+if ($stmt) {
+    $stmt->bind_param("s", $today);
+    if ($stmt->execute()) {
+        $result = $stmt->get_result();
+        while ($entry = $result->fetch_assoc()) $upcomingEvents[] = $entry;
+    } else { $scheduleError = true; }
+    $stmt->close();
+} else { $scheduleError = true; }
+/* Build the mini calendar from the same schedule, including historical entries. */
 $calendarYear = (int) $calendarToday->format("Y");
 $calendarMonth = (int) $calendarToday->format("n");
 $calendarDaysInMonth = (int) $calendarToday->format("t");
@@ -144,41 +153,30 @@ $calendarFirstWeekday = (int) (new DateTimeImmutable($calendarToday->format("Y-m
 $calendarMonthStart = $calendarToday->format("Y-m-01");
 $calendarNextMonthStart = $calendarToday->modify("first day of next month")->format("Y-m-d");
 $calendarEventsByDate = [];
-$calendarEventColors = [
-    "catering" => "#d8b4fe",
-    "inventory" => "#fca5a5",
-    "meeting" => "#86efac",
-    "other" => "#9ca3af"
-];
-$calendarStmt = $conn->prepare(
-    "SELECT event_name, event_date, event_type
-     FROM events
-     WHERE event_date >= ? AND event_date < ?
-     ORDER BY event_date ASC, start_time ASC"
-);
+$calendarEventColors = ["catering" => "#d8b4fe", "inventory" => "#fca5a5",
+    "meeting" => "#86efac", "other" => "#9ca3af", "project" => "#91d3d1", "cancelled" => "#fca5a5"];
+$calendarStmt = $conn->prepare("SELECT * FROM ($scheduleSql) AS schedule
+    WHERE event_date >= ? AND event_date < ?
+    ORDER BY event_date ASC, start_time ASC, source ASC, id ASC");
 if ($calendarStmt) {
     $calendarStmt->bind_param("ss", $calendarMonthStart, $calendarNextMonthStart);
     if ($calendarStmt->execute()) {
         $calendarResult = $calendarStmt->get_result();
-        while ($calendarEvent = $calendarResult->fetch_assoc()) {
-            $dateKey = $calendarEvent["event_date"];
-            $eventType = strtolower(trim($calendarEvent["event_type"] ?? "other"));
-            if (!isset($calendarEventColors[$eventType])) {
-                $eventType = "other";
-            }
+        while ($entry = $calendarResult->fetch_assoc()) {
+            $dateKey = $entry["event_date"];
+            $project = $entry['source'] === 'project';
+            $type = $project ? ($entry['status'] === 'Cancelled' ? 'cancelled' : 'project') : strtolower(trim($entry['event_type'] ?? 'other'));
+            if (!isset($calendarEventColors[$type])) $type = 'other';
             if (!isset($calendarEventsByDate[$dateKey])) {
-                $calendarEventsByDate[$dateKey] = [
-                    "color" => $calendarEventColors[$eventType],
-                    "types" => [],
-                    "names" => []
-                ];
+                $calendarEventsByDate[$dateKey] = ['color' => $calendarEventColors[$type], 'types' => [], 'names' => []];
             }
-            $calendarEventsByDate[$dateKey]["types"][$eventType] = true;
-            $calendarEventsByDate[$dateKey]["names"][] = $calendarEvent["event_name"];
+            $calendarEventsByDate[$dateKey]['types'][$type] = true;
+            $calendarEventsByDate[$dateKey]['names'][] = ($project ? 'Project: ' : 'Event: ') . $entry['event_name'] . ($entry['status'] === 'Cancelled' ? ' (Cancelled)' : '');
+            if (count($calendarEventsByDate[$dateKey]['types']) > 1) $calendarEventsByDate[$dateKey]['color'] = '#122b49';
         }
-    }
+    } else { $scheduleError = true; }
     $calendarStmt->close();
-}
+} else { $scheduleError = true; }
 /* Get logged-in user's display name */
 $displayName = trim($_SESSION["user_name"] ?? "");
 if ($displayName === "") {
@@ -490,6 +488,7 @@ if (count($nameParts) >= 2) {
     .date-purple { color: #805ad5; }
     .date-orange { color: #dd6b20; }
     .date-green { color: #38a169; }
+    .date-project { color: #267c79; }
     .options-btn {
       background: none;
       border: none;
@@ -770,23 +769,14 @@ if (count($nameParts) >= 2) {
         <h1 class="page-title">Dashboard</h1>
         <div class="dashboard-grid">
           <div class="left-column">
-            <div class="post-box">
-              <div class="post-tabs">
-                <button class="tab-btn active" type="button">MESSAGE</button>
-                <button class="tab-btn" type="button">EVENT</button>
-                <button class="tab-btn" type="button">POLL</button>
-                <button class="tab-btn" type="button">FILE</button>
-              </div>
-              <div class="post-input-container">
-                <input type="text" placeholder="Send a message...">
-              </div>
-            </div>
+            <?php $communicationPage='dashboard'; require __DIR__.'/communication_ui.php'; ?>
             <div class="card events-card">
               <div class="card-header">
-                <h2>Upcoming Events</h2>
-                <a href="calendar.php" class="view-all">View All</a>
+                <h2>Upcoming Events &amp; Projects</h2>
+                <a href="calendar.php?view=all" class="view-all">View All</a>
               </div>
               <div class="events-list">
+                <?php if ($scheduleError): ?><p class="event-desc">Unable to load some schedule information.</p><?php endif; ?>
                 <?php if (!empty($upcomingEvents)): ?>
                   <?php
                     $eventColors = ["date-purple", "date-orange", "date-green"];
@@ -801,7 +791,7 @@ if (count($nameParts) >= 2) {
                           $eventDescription = trim($event["event_type"] ?? "");
                       }
                       $eventLocation = trim($event["location"] ?? "");
-                      $eventColor = $eventColors[$index % count($eventColors)];
+                      $eventColor = $event['source'] === 'project' ? 'date-project' : $eventColors[$index % count($eventColors)];
                   ?>
                     <div class="event-item">
                       <div class="event-top">
@@ -811,7 +801,7 @@ if (count($nameParts) >= 2) {
                         </span>
                       </div>
                       <h3 class="event-title">
-                        <?= htmlspecialchars($event["event_name"], ENT_QUOTES, "UTF-8") ?>
+                        <?= $event["source"] === "project" ? "Project: " : "Event: " ?><?= htmlspecialchars($event["event_name"], ENT_QUOTES, "UTF-8") ?>
                       </h3>
                       <p class="event-desc">
                         <?= htmlspecialchars(
@@ -831,9 +821,9 @@ if (count($nameParts) >= 2) {
                   <?php endforeach; ?>
                 <?php else: ?>
                   <div class="event-item">
-                    <h3 class="event-title">No upcoming events</h3>
-                    <p class="event-desc">Your upcoming calendar events will appear here.</p>
-                    <div class="event-meta">Add an event through the Calendar page.</div>
+                    <h3 class="event-title">No upcoming events or projects</h3>
+                    <p class="event-desc">Your upcoming calendar events and projects will appear here.</p>
+                    <div class="event-meta">Add an event through Calendar or a project through Projects.</div>
                   </div>
                 <?php endif; ?>
               </div>
@@ -879,7 +869,7 @@ if (count($nameParts) >= 2) {
                     class="<?php echo htmlspecialchars($dateClasses, ENT_QUOTES, "UTF-8"); ?>"
                     <?php if ($hasEvents): ?>
                       style="<?php echo htmlspecialchars($eventStyle, ENT_QUOTES, "UTF-8"); ?>"
-                      title="<?php echo htmlspecialchars($eventTitle, ENT_QUOTES, "UTF-8"); ?>"
+                      data-schedule-date="<?= htmlspecialchars($calendarDateKey, ENT_QUOTES, "UTF-8") ?>" role="button" tabindex="0" title="<?php echo htmlspecialchars($eventTitle, ENT_QUOTES, "UTF-8"); ?>"
                       aria-label="<?php echo htmlspecialchars(date("F j, Y", strtotime($calendarDateKey)) . ". Events: " . $eventTitle, ENT_QUOTES, "UTF-8"); ?>"
                     <?php elseif ($isToday): ?>
                       aria-current="date"
@@ -1006,5 +996,23 @@ if (count($nameParts) >= 2) {
     ].join("-");
     taskDeadlineInput.min = localToday;
   </script>
+<?php
+if(empty($_SESSION['calendar_csrf'])) $_SESSION['calendar_csrf']=bin2hex(random_bytes(32));
+function calendarEscape($value){return htmlspecialchars((string)$value,ENT_QUOTES,'UTF-8');}
+$error='';$formAction='add_event';$editingEventId='';$month=$calendarMonth;$year=$calendarYear;$showAll=false;
+$formValues=array_fill_keys(['event_name','event_date','start_time','end_time','event_type','location','description','assigned_staff','notes'],'');$formValues['event_type']='catering';
+$dashboardEventForm=true; require __DIR__.'/calendar_event_form.php';
+?>
+<dialog class="schedule-day-dialog" id="scheduleDayDialog"><h2 id="scheduleDayTitle"></h2><ul id="scheduleDayEntries"></ul><p><a id="scheduleDayLink" href="calendar.php">Open Calendar</a></p><button type="button" id="scheduleDayClose">Close</button></dialog>
+<script type="application/json" id="scheduleData"><?= json_encode($calendarEventsByDate,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_INVALID_UTF8_SUBSTITUTE) ?></script>
+<script>
+window.openDashboardEvent=()=>{document.getElementById('eventForm').reset();document.getElementById('addEventModal').classList.add('active');};
+document.getElementById('closeModalBtn').onclick=()=>document.getElementById('addEventModal').classList.remove('active');
+document.getElementById('addEventModal').addEventListener('click',e=>{if(e.target.id==='addEventModal')e.target.classList.remove('active');});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('addEventModal').classList.remove('active');});
+const scheduleData=JSON.parse(document.getElementById('scheduleData').textContent),scheduleDialog=document.getElementById('scheduleDayDialog');
+function showScheduleDate(day){const date=day.dataset.scheduleDate,entry=scheduleData[date];if(!entry)return;document.getElementById('scheduleDayTitle').textContent=new Date(date+'T00:00:00').toLocaleDateString('en-PH',{dateStyle:'long'});const list=document.getElementById('scheduleDayEntries');list.replaceChildren();for(const name of entry.names){const li=document.createElement('li');li.textContent=name+' — '+date;list.append(li);}document.getElementById('scheduleDayLink').href='calendar.php?year='+date.slice(0,4)+'&month='+Number(date.slice(5,7));scheduleDialog.showModal();}
+document.querySelectorAll('[data-schedule-date]').forEach(day=>{day.onclick=()=>showScheduleDate(day);day.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showScheduleDate(day);}};});document.getElementById('scheduleDayClose').onclick=()=>scheduleDialog.close();
+</script>
 </body>
 </html>

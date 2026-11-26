@@ -441,7 +441,13 @@ function messagesEscape($value) {
         display: none;
       }
     }
-  </style>
+  .docubiz-emoji-picker{background:#fff;border:1px solid #dedede;border-radius:8px;padding:10px;margin:8px 0;color:#64748b;font-size:12px}
+.docubiz-emoji-buttons{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px}
+.docubiz-emoji-picker .docubiz-emoji-buttons button{border:0;background:transparent;font-size:22px;padding:4px 6px;border-radius:6px;cursor:pointer;line-height:1.3}
+.docubiz-emoji-picker .docubiz-emoji-buttons button:hover{background:#e3f1f0}
+.docubiz-emoji-picker p{margin:0;font-size:12px;line-height:1.5}
+
+</style>
 </head>
 <body>
   <div class="app-layout">
@@ -595,21 +601,38 @@ function messagesEscape($value) {
             </div>
             <div class="chat-input-area">
               <div class="chat-input-wrapper">
-                <input type="text" placeholder="Type a message...">
+                <input id="localMessage" type="text" placeholder="Type a message..." aria-label="Message draft" autocomplete="off">
                 <div class="input-actions">
-                  <button class="input-icon-btn">
+                  <button type="button" class="input-icon-btn" id="localEmoji" aria-label="Emoji keyboard" title="Emoji keyboard">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
                   </button>
-                  <button class="input-icon-btn">
+                  <button type="button" class="input-icon-btn" id="localAttach" aria-label="Choose local attachment" title="Choose attachment"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5l-8.5 8.5a5 5 0 0 1-7-7L15 3.5a3 3 0 0 1 4.2 4.2l-9 9a1 1 0 0 1-1.4-1.4l8-8"/></svg></button>
+                  <button type="button" class="input-icon-btn" id="localSend" aria-label="Send preview" title="Send preview">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                   </button>
                 </div>
               </div>
+              <input type="file" id="localFiles" multiple hidden>
+              <div id="localFileList" aria-label="Local attachments"></div>
+              <p id="localNotice" role="status" style="font-size:.75rem;color:#64748b;margin-top:6px">Draft only — nothing is sent or uploaded.</p>
             </div>
           </div>
         </div>
       </main>
     </div>
   </div>
+<script src="emoji_keyboard.js?v=<?= filemtime(__DIR__.'/emoji_keyboard.js') ?>"></script>
+<script>
+(() => {
+ const input=document.getElementById('localMessage'), picker=document.getElementById('localFiles'), list=document.getElementById('localFileList'), notice=document.getElementById('localNotice');
+ let files=[];
+ function render(){list.replaceChildren();files.forEach((file,i)=>{const row=document.createElement('div');row.style.cssText='display:flex;gap:8px;align-items:center;font-size:.8rem;margin-top:5px;overflow-wrap:anywhere';const name=document.createElement('span');name.textContent=file.name+' (local only)';const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.setAttribute('aria-label','Remove '+file.name);remove.onclick=()=>{files.splice(i,1);render();};row.append(name,remove);list.append(row);});}
+ document.getElementById('localEmoji').onclick=()=>window.docubizEmojiKeyboard(input,text=>notice.textContent=text);
+ document.getElementById('localAttach').onclick=()=>picker.click();
+ picker.onchange=()=>{files.push(...Array.from(picker.files));picker.value='';render();};
+ document.getElementById('localSend').onclick=()=>{notice.textContent='Preview only — no message or attachment was sent.';};
+ input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();document.getElementById('localSend').click();}});
+})();
+</script>
 </body>
 </html>
