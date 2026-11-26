@@ -1,3 +1,4 @@
+
 <?php
 session_start();
 if (!isset($_SESSION["user_id"])) {
@@ -447,6 +448,119 @@ function messagesEscape($value) {
 .docubiz-emoji-picker .docubiz-emoji-buttons button:hover{background:#e3f1f0}
 .docubiz-emoji-picker p{margin:0;font-size:12px;line-height:1.5}
 
+/* Logout Confirmation Popup */
+.logout-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(10, 25, 45, 0.55);
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.logout-modal.show {
+    display: flex;
+}
+
+.logout-modal-content {
+    width: 100%;
+    max-width: 380px;
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 28px;
+    text-align: center;
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.2);
+    animation: logoutPop 0.2s ease;
+}
+
+@keyframes logoutPop {
+    from {
+        opacity: 0;
+        transform: scale(0.94);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.logout-modal-icon {
+    width: 58px;
+    height: 58px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    background: #e8eef5;
+    color: #122b49;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.logout-modal-content h2 {
+    color: #122b49;
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.logout-modal-content p {
+    color: #718096;
+    font-size: 0.84rem;
+    line-height: 1.6;
+    margin-bottom: 24px;
+}
+
+.logout-modal-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.logout-cancel,
+.logout-confirm {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 7px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: 0.2s ease;
+}
+
+.logout-cancel {
+    background: #edf1f5;
+    color: #122b49;
+    border: 1px solid #d7dfe8;
+}
+
+.logout-cancel:hover {
+    background: #dfe6ee;
+}
+
+.logout-confirm {
+    background: #122b49;
+    color: #ffffff;
+    border: 1px solid #122b49;
+}
+
+.logout-confirm:hover {
+    background: #274b73;
+}
+
+.sidebar {
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-menu {
+    flex: 1;
+    min-height: calc(100vh - 75px);
+}
+
+.sidebar-logout {
+    margin-top: auto;
+}
 </style>
 </head>
 <body>
@@ -460,7 +574,6 @@ function messagesEscape($value) {
       </div>
       <div class="topbar-right-actions">
         
-      
         <a href="settings.php" class="icon-btn" title="Settings">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0l.06.06a2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         </a>
@@ -480,8 +593,7 @@ function messagesEscape($value) {
             <span class="user-role"><?php echo messagesEscape($displayRole); ?></span>
           </div>
         </div>
-        <!-- Log Out Button na may space at walang bold -->
-        <a href="logout.php" class="logout-btn">Log Out</a>
+
       </div>
     </header>
     <div class="main-body">
@@ -529,6 +641,17 @@ function messagesEscape($value) {
     <span>Finances</span>
 </a>
 <?php endif; ?>
+
+<a href="#" class="menu-item sidebar-logout" id="logoutButton">
+    <svg width="18" height="18" viewBox="0 0 24 24"
+         fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+        <polyline points="16 17 21 12 16 7"></polyline>
+        <line x1="21" y1="12" x2="9" y2="12"></line>
+    </svg>
+    <span>Log Out</span>
+</a>
 
         </nav>
       </aside>
@@ -621,6 +744,29 @@ function messagesEscape($value) {
       </main>
     </div>
   </div>
+
+  <!-- Logout Confirmation Popup -->
+  <div class="logout-modal" id="logoutModal">
+    <div class="logout-modal-content">
+      <div class="logout-modal-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round"
+             stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <polyline points="16 17 21 12 16 7"></polyline>
+          <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+      </div>
+      <h2>Log Out?</h2>
+      <p>Are you sure you want to log out of your DocuBiz account?</p>
+      <div class="logout-modal-actions">
+        <button type="button" class="logout-cancel" id="cancelLogout">Cancel</button>
+        <button type="button" class="logout-confirm" id="confirmLogout">Yes, Log Out</button>
+      </div>
+    </div>
+  </div>
+
 <script src="emoji_keyboard.js?v=<?= filemtime(__DIR__.'/emoji_keyboard.js') ?>"></script>
 <script>
 (() => {
@@ -633,6 +779,37 @@ function messagesEscape($value) {
  document.getElementById('localSend').onclick=()=>{notice.textContent='Preview only — no message or attachment was sent.';};
  input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();document.getElementById('localSend').click();}});
 })();
+
+/* Logout Confirmation Popup */
+const logoutButton = document.getElementById("logoutButton");
+const logoutModal = document.getElementById("logoutModal");
+const cancelLogout = document.getElementById("cancelLogout");
+const confirmLogout = document.getElementById("confirmLogout");
+
+logoutButton.addEventListener("click", function (e) {
+    e.preventDefault();
+    logoutModal.classList.add("show");
+});
+
+cancelLogout.addEventListener("click", function () {
+    logoutModal.classList.remove("show");
+});
+
+confirmLogout.addEventListener("click", function () {
+    window.location.href = "logout.php";
+});
+
+logoutModal.addEventListener("click", function (e) {
+    if (e.target === logoutModal) {
+        logoutModal.classList.remove("show");
+    }
+});
+
+document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+        logoutModal.classList.remove("show");
+    }
+});
 </script>
 </body>
 </html>

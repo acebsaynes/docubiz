@@ -1,56 +1,84 @@
+
 <?php
 session_start();
+
 if (!isset($_SESSION["user_id"])) {
     header("Location: login.php");
     exit;
 }
+
 require_once "db.php";
 date_default_timezone_set("Asia/Manila");
+
 $userRoleSession = strtolower(trim($_SESSION['user_role'] ?? $_SESSION['role'] ?? 'user'));
 $isAdmin = $userRoleSession === 'admin';
 $userId = (int) $_SESSION['user_id'];
-if ($userId < 1) { http_response_code(403); exit('Invalid session.'); }
-if (empty($_SESSION['calendar_csrf'])) $_SESSION['calendar_csrf'] = bin2hex(random_bytes(32));
-if (empty($_SESSION['project_csrf'])) $_SESSION['project_csrf'] = bin2hex(random_bytes(32));
+
+if ($userId < 1) {
+    http_response_code(403);
+    exit('Invalid session.');
+}
+
+if (empty($_SESSION['calendar_csrf'])) {
+    $_SESSION['calendar_csrf'] = bin2hex(random_bytes(32));
+}
+
+if (empty($_SESSION['project_csrf'])) {
+    $_SESSION['project_csrf'] = bin2hex(random_bytes(32));
+}
+
 require __DIR__ . '/project_config.php';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!is_string($_POST['csrf'] ?? null) || !hash_equals($_SESSION['calendar_csrf'], $_POST['csrf'])) {
         http_response_code(403);
         exit('Forbidden: a valid security token is required.');
     }
 }
+
 $success = "";
 $error = "";
+
 $month = isset($_GET["month"]) ? (int)$_GET["month"] : (int)date("n");
 $year = isset($_GET["year"]) ? (int)$_GET["year"] : (int)date("Y");
 $showAll = isset($_GET["view"]) && $_GET["view"] === "all";
+
 if ($month < 1 || $month > 12) {
     $month = (int)date("n");
 }
+
 if ($year < 2000 || $year > 2100) {
     $year = (int)date("Y");
 }
+
 $monthStart = sprintf("%04d-%02d-01", $year, $month);
 $monthTimestamp = strtotime($monthStart);
 $daysInMonth = (int)date("t", $monthTimestamp);
 $firstWeekday = (int)date("w", $monthTimestamp);
 $currentMonthLabel = date("F Y", $monthTimestamp);
+
 $prevMonth = $month - 1;
 $prevYear = $year;
+
 if ($prevMonth < 1) {
     $prevMonth = 12;
     $prevYear--;
 }
+
 $nextMonth = $month + 1;
 $nextYear = $year;
+
 if ($nextMonth > 12) {
     $nextMonth = 1;
     $nextYear++;
 }
+
 /* HELPER FUNCTIONS */
+
 function calendarEscape($value) {
     return htmlspecialchars((string)$value, ENT_QUOTES, "UTF-8");
 }
+
 function eventBadgeClass($type) {
     $classes = [
         "catering" => "badge-catering",
@@ -58,8 +86,10 @@ function eventBadgeClass($type) {
         "meeting" => "badge-meeting",
         "other" => "badge-other"
     ];
+
     return $classes[$type] ?? "badge-other";
 }
+
 function eventTypeLabel($type) {
     $labels = [
         "catering" => "Catering Event",
@@ -67,31 +97,44 @@ function eventTypeLabel($type) {
         "meeting" => "Meeting",
         "other" => "Other"
     ];
+
     return $labels[$type] ?? "Other";
 }
+
 function validEventDate($date) {
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
         return false;
     }
+
     return checkdate(
         (int)substr($date, 5, 2),
         (int)substr($date, 8, 2),
         (int)substr($date, 0, 4)
     );
 }
+
 function calendarRedirect($month, $year, $view = "") {
-    if (($_POST["form_action"] ?? "") === "add_event" && ($_POST["return_dashboard"] ?? "") === "1") { header("Location: dashboard.php"); exit; }
+    if (($_POST["form_action"] ?? "") === "add_event" && ($_POST["return_dashboard"] ?? "") === "1") {
+        header("Location: dashboard.php");
+        exit;
+    }
+
     $url = "calendar.php?month=" . (int)$month .
            "&year=" . (int)$year;
+
     if ($view === "all") {
         $url .= "&view=all";
     }
+
     header("Location: " . $url);
     exit;
 }
+
 /* FORM DEFAULTS */
+
 $formAction = "add_event";
 $editingEventId = "";
+
 $formValues = [
     "event_name" => "",
     "event_date" => "",
@@ -103,55 +146,91 @@ $formValues = [
     "assigned_staff" => "",
     "notes" => ""
 ];
+
 /* HANDLE FORM SUBMISSIONS */
+
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
+
     $action = $_POST["form_action"] ?? "";
+
     // Ownership is checked on the server, never from a submitted owner ID.
     if (in_array($action, ["update_event", "delete_event"], true) && !$isAdmin) {
+
         $targetId = filter_var($_POST['event_id'] ?? null, FILTER_VALIDATE_INT);
-        if (!$targetId || $targetId < 1) { http_response_code(403); exit('Forbidden.'); }
+
+        if (!$targetId || $targetId < 1) {
+            http_response_code(403);
+            exit('Forbidden.');
+        }
+
         $ownerCheck = $conn->prepare("SELECT id FROM events WHERE id = ? AND created_by = ?");
         $ownerCheck->bind_param("ii", $targetId, $userId);
         $ownerCheck->execute();
+
         $allowed = $ownerCheck->get_result()->num_rows === 1;
         $ownerCheck->close();
-        if (!$allowed) { http_response_code(403); exit('You can only edit or delete events you created.'); }
+
+        if (!$allowed) {
+            http_response_code(403);
+            exit('You can only edit or delete events you created.');
+        }
     }
+
     /* DELETE EVENT */
+
     if ($action === "delete_event") {
+
         $eventId = filter_var(
             $_POST["event_id"] ?? "",
             FILTER_VALIDATE_INT
         );
+
         if (!$eventId || $eventId < 1) {
+
             $error = "Invalid event selected.";
+
         } else {
+
             $stmt = $conn->prepare(
                 "DELETE FROM events WHERE id = ? AND (? = 1 OR created_by = ?)"
             );
+
             if ($stmt) {
+
                 $adminFlag = $isAdmin ? 1 : 0;
+
                 $stmt->bind_param("iii", $eventId, $adminFlag, $userId);
+
                 if ($stmt->execute()) {
+
                     $deleted = $stmt->affected_rows;
                     $stmt->close();
+
                     if ($deleted > 0) {
                         calendarRedirect($month, $year, "all");
                     } else {
                         $error = "Event not found. It may have already been deleted.";
                     }
+
                 } else {
+
                     $stmt->close();
                     $error = "Unable to delete the event. Please try again.";
                 }
+
             } else {
+
                 $error = "Unable to prepare the delete request.";
             }
         }
     }
+
     /* ADD OR UPDATE EVENT */
+
     if ($action === "add_event" || $action === "update_event") {
+
         $formAction = $action;
+
         $eventName = trim($_POST["event_name"] ?? "");
         $eventDate = trim($_POST["event_date"] ?? "");
         $startTime = trim($_POST["start_time"] ?? "");
@@ -162,6 +241,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $assignedStaff = trim($_POST["assigned_staff"] ?? "");
         $notes = trim($_POST["notes"] ?? "");
         $editingEventId = trim($_POST["event_id"] ?? "");
+
         $formValues = [
             "event_name" => $eventName,
             "event_date" => $eventDate,
@@ -173,35 +253,45 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             "assigned_staff" => $assignedStaff,
             "notes" => $notes
         ];
+
         $allowedTypes = [
             "catering",
             "inventory",
             "meeting",
             "other"
         ];
+
         if (
             $eventName === "" ||
             $eventDate === "" ||
             $startTime === ""
         ) {
+
             $error = "Please fill in the event name, date, and start time.";
+
         } elseif (!validEventDate($eventDate)) {
+
             $error = "Please select a valid event date.";
-        } elseif (
-            !in_array($eventType, $allowedTypes, true)
-        ) {
+
+        } elseif (!in_array($eventType, $allowedTypes, true)) {
+
             $error = "Please select a valid event type.";
+
         } elseif (
             !preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $startTime) ||
             ($endTime !== "" &&
              !preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $endTime))
         ) {
+
             $error = "Please enter valid event times.";
+
         } elseif (
             $endTime !== "" &&
             strtotime($endTime) < strtotime($startTime)
         ) {
+
             $error = "End time cannot be earlier than start time.";
+
         } elseif (
             $action === "update_event" &&
             (
@@ -209,17 +299,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 (int)$editingEventId < 1
             )
         ) {
+
             $error = "Invalid event selected for editing.";
+
         } else {
+
             $endTimeValue = ($endTime === "") ? null : $endTime;
+
             if ($action === "add_event") {
+
                 $stmt = $conn->prepare(
                     "INSERT INTO events
                     (event_name, event_date, start_time, end_time,
                      event_type, location, description, assigned_staff, notes, created_by)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 );
+
                 if ($stmt) {
+
                     $stmt->bind_param(
                         "sssssssssi",
                         $eventName,
@@ -233,20 +330,29 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         $notes,
                         $userId
                     );
+
                     if ($stmt->execute()) {
+
                         $stmt->close();
+
                         calendarRedirect(
                             (int)date("n", strtotime($eventDate)),
                             (int)date("Y", strtotime($eventDate))
                         );
                     }
+
                     $stmt->close();
                     $error = "Unable to save the event. Please try again.";
+
                 } else {
+
                     $error = "Unable to prepare the event. Please check the database connection.";
                 }
+
             } else {
+
                 $eventId = (int)$editingEventId;
+
                 $stmt = $conn->prepare(
                     "UPDATE events
                      SET event_name = ?,
@@ -260,8 +366,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                          notes = ?
                      WHERE id = ? AND (? = 1 OR created_by = ?)"
                 );
+
                 if ($stmt) {
+
                     $adminFlag = $isAdmin ? 1 : 0;
+
                     $stmt->bind_param(
                         "sssssssssiii",
                         $eventName,
@@ -277,972 +386,1816 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         $adminFlag,
                         $userId
                     );
+
                     if ($stmt->execute()) {
+
                         $stmt->close();
+
                         calendarRedirect(
                             (int)date("n", strtotime($eventDate)),
                             (int)date("Y", strtotime($eventDate)),
                             "all"
                         );
                     }
+
                     $stmt->close();
                     $error = "Unable to update the event. Please try again.";
+
                 } else {
+
                     $error = "Unable to prepare the update request.";
                 }
             }
         }
     }
 }
-/* Read both sources directly: projects are never copied into events. */
+
+/* READ BOTH SOURCES DIRECTLY: PROJECTS ARE NEVER COPIED INTO EVENTS */
+
 $allEvents = [];
+
 $result = $conn->query("SELECT id, event_name, event_date, start_time, end_time,
     event_type, location, description, assigned_staff, notes, created_by FROM events");
-if (!$result) { http_response_code(500); exit('Unable to load calendar events.'); }
+
+if (!$result) {
+    http_response_code(500);
+    exit('Unable to load calendar events.');
+}
+
 while ($row = $result->fetch_assoc()) {
+
     $row['source'] = 'event';
-    $row['can_edit'] = $isAdmin || ($row['created_by'] !== null && (int)$row['created_by'] === $userId);
+
+    $row['can_edit'] = $isAdmin ||
+        ($row['created_by'] !== null && (int)$row['created_by'] === $userId);
+
     unset($row['created_by']);
+
     $allEvents[] = $row;
 }
+
 $result = $conn->query("SELECT id, project_name AS event_name,
     COALESCE(due_date, start_date) AS event_date, event_time AS start_time,
     location, event_type, status FROM projects");
-if (!$result) { http_response_code(500); exit('Unable to load calendar projects.'); }
+
+if (!$result) {
+    http_response_code(500);
+    exit('Unable to load calendar projects.');
+}
+
 while ($row = $result->fetch_assoc()) {
+
     $row['source'] = 'project';
     $row['end_time'] = null;
+
     $allEvents[] = $row;
 }
+
 usort($allEvents, function ($a, $b) {
-    return strcmp($a['event_date'] ?: '9999-12-31', $b['event_date'] ?: '9999-12-31')
-        ?: (($a['start_time'] === null) <=> ($b['start_time'] === null))
-        ?: strcmp($a['start_time'] ?? '', $b['start_time'] ?? '')
-        ?: strcmp($a['source'], $b['source']) ?: ($a['id'] <=> $b['id']);
+
+    return strcmp(
+        $a['event_date'] ?: '9999-12-31',
+        $b['event_date'] ?: '9999-12-31'
+    )
+    ?: (($a['start_time'] === null) <=> ($b['start_time'] === null))
+    ?: strcmp($a['start_time'] ?? '', $b['start_time'] ?? '')
+    ?: strcmp($a['source'], $b['source'])
+    ?: ($a['id'] <=> $b['id']);
 });
+
 $eventsByDate = [];
 $upcomingEvents = [];
 $today = date('Y-m-d');
 $monthPrefix = sprintf('%04d-%02d-', $year, $month);
+
 foreach ($allEvents as $entry) {
+
     if ($entry['event_date'] && strpos($entry['event_date'], $monthPrefix) === 0) {
         $eventsByDate[$entry['event_date']][] = $entry;
     }
-    if ($entry['event_date'] && $entry['event_date'] >= $today &&
-        !in_array($entry['status'] ?? '', ['Cancelled', 'Completed'], true)) {
+
+    if (
+        $entry['event_date'] &&
+        $entry['event_date'] >= $today &&
+        !in_array($entry['status'] ?? '', ['Cancelled', 'Completed'], true)
+    ) {
         $upcomingEvents[] = $entry;
     }
 }
+
 $upcomingEvents = array_slice($upcomingEvents, 0, 5);
+
 // Full history: furthest future date first, then earlier dates; undated last.
 $allEntriesNewestFirst = $allEvents;
+
 usort($allEntriesNewestFirst, function ($a, $b) {
-    return strcmp($b['event_date'] ?: '0000-00-00', $a['event_date'] ?: '0000-00-00')
-        ?: strcmp($b['start_time'] ?? '', $a['start_time'] ?? '')
-        ?: strcmp($a['source'], $b['source']) ?: ($b['id'] <=> $a['id']);
+
+    return strcmp(
+        $b['event_date'] ?: '0000-00-00',
+        $a['event_date'] ?: '0000-00-00'
+    )
+    ?: strcmp($b['start_time'] ?? '', $a['start_time'] ?? '')
+    ?: strcmp($a['source'], $b['source'])
+    ?: ($b['id'] <=> $a['id']);
 });
 
 function entryClass($entry) {
-    if ($entry['source'] === 'project') return 'badge-project' . (($entry['status'] ?? '') === 'Cancelled' ? ' badge-cancelled' : '');
+
+    if ($entry['source'] === 'project') {
+        return 'badge-project' . (($entry['status'] ?? '') === 'Cancelled' ? ' badge-cancelled' : '');
+    }
+
     return eventBadgeClass($entry['event_type']);
 }
+
 function entryAttributes($entry) {
-    if ($entry['source'] === 'project') return 'data-view="' . (int)$entry['id'] . '"';
+
+    if ($entry['source'] === 'project') {
+        return 'data-view="' . (int)$entry['id'] . '"';
+    }
+
     return 'data-calendar-event="' . calendarEscape(json_encode($entry, JSON_INVALID_UTF8_SUBSTITUTE)) . '"';
 }
+
 function entryTitle($entry) {
-    return ($entry['source'] === 'project' ? 'Project: ' : '') . $entry['event_name'] . (($entry['status'] ?? '') === 'Cancelled' ? ' (Cancelled)' : '');
+
+    return ($entry['source'] === 'project' ? 'Project: ' : '') .
+        $entry['event_name'] .
+        (($entry['status'] ?? '') === 'Cancelled' ? ' (Cancelled)' : '');
 }
-function entryTime($time) { return $time ? date('g:i A', strtotime($time)) : 'Time not set'; }
+
+function entryTime($time) {
+    return $time ? date('g:i A', strtotime($time)) : 'Time not set';
+}
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DocuBiz - Calendar</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="project_modal.css">
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
-    body {
-      background-color: #d8dcdb;
-      color: #333;
-      min-height: 100vh;
-    }
-    .app-layout {
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-    }
-    .topbar {
-      background-color: #122b49;
-      height: 60px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 20px;
-      color: #ffffff;
-    }
-    .brand-container {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-      width: 200px;
-    }
-    .hamburger-btn {
-      background: none;
-      border: none;
-      color: #ffffff;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-    }
-    .brand-name {
-      font-size: 1.4rem;
-      font-weight: 600;
-      letter-spacing: -0.5px;
-    }
-    .search-bar {
-      position: relative;
-      width: 450px;
-      display: flex;
-      align-items: center;
-    }
-    .search-bar input {
-      width: 100%;
-      padding: 8px 45px 8px 16px;
-      border-radius: 20px;
-      border: none;
-      outline: none;
-      background-color: #ffffff;
-      font-size: 0.85rem;
-      color: #2d3748;
-    }
-    .search-bar input::placeholder {
-      color: #8fa0b5;
-    }
-    .search-btn {
-      position: absolute;
-      right: 12px;
-      background: none;
-      border: none;
-      color: #122b49;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-    }
-    .topbar-actions {
-      display: flex;
-      align-items: center;
-      gap: 18px;
-    }
-    .icon-btn {
-      background: none;
-      border: none;
-      color: #ffffff;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      opacity: 0.9;
-      text-decoration: none;
-    }
-    .icon-btn:hover {
-      opacity: 1;
-    }
-    .user-profile {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-left: 10px;
-    }
-    .profile-avatar {
-      width: 34px;
-      height: 34px;
-      border-radius: 50%;
-      background-color: #2b5585;
-      color: #ffffff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.85rem;
-      font-weight: 600;
-    }
-    .profile-info {
-      display: flex;
-      flex-direction: column;
-      line-height: 1.2;
-    }
-    .user-name {
-      font-size: 0.82rem;
-      font-weight: 500;
-    }
-    .user-role {
-      font-size: 0.72rem;
-      color: #9bb3d1;
-    }
-    .logout-btn {
-      color: #ffffff;
-      text-decoration: none;
-      font-size: 0.85rem;
-      font-weight: 400;
-      opacity: 0.9;
-      transition: opacity 0.2s;
-      margin-left: 5px;
-    }
-    .logout-btn:hover {
-      opacity: 1;
-      text-decoration: underline;
-    }
-    .main-body {
-      display: flex;
-      flex: 1;
-    }
-    .sidebar {
-      width: 210px;
-      background-color: #122b49;
-      padding-top: 15px;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
-    }
-    .sidebar-menu {
-      display: flex;
-      flex-direction: column;
-    }
-    .menu-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 20px;
-      color: #b0c4de;
-      text-decoration: none;
-      font-size: 0.88rem;
-      transition: all 0.2s ease;
-    }
-    .menu-item:hover {
-      color: #ffffff;
-      background-color: rgba(255, 255, 255, 0.05);
-    }
-    .menu-item.active {
-      color: #ffffff;
-      background-color: #274b73;
-    }
-    .content-area {
-      flex: 1;
-      padding: 30px 40px;
-      background-color: #d5dad9;
-    }
-    .page-header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      margin-bottom: 20px;
-    }
-    .page-title {
-      font-size: 1.8rem;
-      font-weight: 600;
-      color: #2a343d;
-      line-height: 1.1;
-    }
-    .page-subtitle {
-      font-size: 0.82rem;
-      color: #637381;
-      margin-top: 4px;
-    }
-    .btn-add-event {
-      background-color: #72dbd9;
-      color: #1a365d;
-      border: none;
-      border-radius: 18px;
-      padding: 8px 18px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-      transition: transform 0.1s ease, background-color 0.2s ease;
-    }
-    .btn-add-event:hover {
-      background-color: #5ececb;
-    }
-    .calendar-grid-container {
-      display: flex;
-      gap: 25px;
-    }
-    .left-calendar-section {
-      flex: 2;
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
-    }
-    .right-events-section {
-      flex: 1;
-      min-width: 0;
-    }
-    .calendar-control-bar {
-      background-color: #ffffff;
-      border-radius: 10px;
-      padding: 12px 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
-    }
-    .month-nav {
-      display: flex;
-      align-items: center;
-      gap: 30px;
-    }
-    .nav-arrow {
-      background: none;
-      border: none;
-      font-size: 1rem;
-      color: #4a5568;
-      cursor: pointer;
-      font-weight: 600;
-    }
-    .current-month {
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: #2d3748;
-    }
-    .btn-today {
-      background: none;
-      border: none;
-      font-size: 0.85rem;
-      font-weight: 500;
-      color: #2d3748;
-      cursor: pointer;
-    }
-    .full-calendar-card {
-      background-color: #ffffff;
-      border-radius: 12px;
-      padding: 20px;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
-    }
-    .calendar-table-header {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      text-align: center;
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: #4a5568;
-      padding-bottom: 15px;
-    }
-    .calendar-month-grid {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      border-top: 1px solid #edf2f7;
-      border-left: 1px solid #edf2f7;
-    }
-    .day-box {
-      min-height: 85px;
-      border-right: 1px solid #edf2f7;
-      border-bottom: 1px solid #edf2f7;
-      padding: 6px;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-    }
-    .day-number {
-      font-size: 0.78rem;
-      color: #2d3748;
-      font-weight: 500;
-      margin-bottom: 4px;
-    }
-    .event-badge {
-      font-size: 0.62rem;
-      padding: 3px 4px;
-      border-radius: 4px;
-      color: #2d3748;
-      line-height: 1.1;
-      font-weight: 500;
-    }
-    button.event-badge { border:0; text-align:left; cursor:pointer; width:100%; margin-bottom:3px; overflow-wrap:anywhere; }
-    .badge-project { background:#91d3d1; }
-    .badge-cancelled { background:#fce3e3; color:#991b1b; }
-    .calendar-entry-link { border:0; background:none; color:inherit; text-align:left; cursor:pointer; font:inherit; font-weight:600; overflow-wrap:anywhere; }
-    .calendar-entry-link:hover { text-decoration:underline; }
-    #calendarEventDetails { margin:auto; }
-    #calendarEventDetails dl { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-    #calendarEventDetails dt { font-weight:600; font-size:.78rem; }
-    #calendarEventDetails dd { font-size:.85rem; white-space:pre-wrap; overflow-wrap:anywhere; }
-    #calendarEventDetails .detail-wide { grid-column:1/-1; }
-    .calendar-legend { flex-wrap:wrap; }
-    .badge-catering {
-      background-color: #d8b4fe;
-    }
-    .badge-inventory {
-      background-color: #fca5a5;
-    }
-    .badge-meeting {
-      background-color: #86efac;
-    }
-    .badge-other {
-      background-color: #9ca3af;
-    }
-    .calendar-legend {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-      padding: 5px 0;
-      font-size: 0.75rem;
-      color: #4a5568;
-    }
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .legend-dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      display: inline-block;
-    }
-    .dot-catering { background-color: #d8b4fe; }
-    .dot-inventory { background-color: #fca5a5; }
-    .dot-meeting { background-color: #86efac; }
-    .dot-other { background-color: #9ca3af; }
-    .card {
-      background: #ffffff;
-      border-radius: 12px;
-      padding: 22px 25px;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
-    }
-    .card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 20px;
-      border-bottom: 1px solid #edf2f7;
-      padding-bottom: 12px;
-    }
-    .card-header h2 {
-      font-size: 1rem;
-      font-weight: 600;
-      color: #2d3748;
-    }
-    .view-all {
-      font-size: 0.8rem;
-      color: #63b3ed;
-      text-decoration: none;
-    }
-    .upcoming-events-list {
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
-    }
-    .upcoming-event-item {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-    }
-    .date-badge {
-      width: 50px;
-      height: 50px;
-      border-radius: 8px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      color: #2d3748;
-      line-height: 1;
-      flex-shrink: 0;
-    }
-    .date-badge .month {
-      font-size: 0.7rem;
-    }
-    .date-badge .day {
-      font-size: 1rem;
-      margin-top: 3px;
-    }
-    .event-details {
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      overflow-wrap: anywhere;
-    }
-    .event-details h3 {
-      font-size: 0.9rem;
-      font-weight: 600;
-      color: #2d3748;
-    }
-    .event-details .meta {
-      font-size: 0.72rem;
-      color: #718096;
-      margin-top: 3px;
-    }
-    .event-details .location {
-      font-size: 0.72rem;
-      color: #a0aec0;
-    }
-    .modal-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: rgba(0, 0, 0, 0.4);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.25s ease, visibility 0.25s ease;
-    }
-    .modal-overlay.active {
-      opacity: 1;
-      visibility: visible;
-    }
-    .modal-container {
-      width: 100%;
-      max-width: 560px;
-      background-color: #ffffff;
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-      transform: scale(0.92);
-      transition: transform 0.25s ease;
-      max-height: 90vh;
-      overflow-y: auto;
-    }
-    .modal-overlay.active .modal-container {
-      transform: scale(1);
-    }
-    .modal-header {
-      background-color: #122b49;
-      padding: 16px 24px;
-      color: #ffffff;
-    }
-    .modal-header h2 {
-      font-size: 1.35rem;
-      font-weight: 600;
-      letter-spacing: -0.3px;
-    }
-    .modal-body {
-      padding: 24px 28px;
-    }
-    .modal-form-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px 24px;
-    }
-    .form-field {
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-    }
-    .form-field label {
-      font-size: 0.82rem;
-      font-weight: 600;
-      color: #122b49;
-      margin-bottom: 6px;
-    }
-    .form-field input,
-    .form-field select,
-    .form-field textarea {
-      width: 100%;
-      padding: 9px 12px;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      font-size: 0.82rem;
-      color: #2d3748;
-      outline: none;
-      background-color: #ffffff;
-    }
-    .form-field input[type="date"],
-    .form-field input[type="time"] {
-      color: #4a5568;
-      cursor: pointer;
-    }
-    .form-field input::placeholder,
-    .form-field textarea::placeholder {
-      color: #cbd5e0;
-    }
-    .form-field select {
-      color: #a0aec0;
-      appearance: none;
-      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http\://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a0aec0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-      background-repeat: no-repeat;
-      background-position: right 10px center;
-      background-size: 14px;
-    }
-    .form-field textarea {
-      resize: none;
-      height: 80px;
-    }
-    .modal-actions {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 12px;
-      margin-top: 24px;
-    }
-    .btn-modal-cancel {
-      padding: 8px 22px;
-      border: 1px solid #e2e8f0;
-      background-color: #ffffff;
-      color: #4a5568;
-      border-radius: 8px;
-      font-size: 0.82rem;
-      font-weight: 500;
-      cursor: pointer;
-    }
-    .btn-modal-save {
-      padding: 8px 20px;
-      border: none;
-      background-color: #72dbd9;
-      color: #1a365d;
-      border-radius: 8px;
-      font-size: 0.82rem;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    @media (max-width: 900px) {
-      .calendar-grid-container {
-        flex-direction: column;
-      }
-      .sidebar {
-        width: 60px;
-      }
-      .sidebar .menu-item span {
-        display: none;
-      }
-      .search-bar {
-        width: 200px;
-      }
-      .modal-form-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-  </style>
-</head>
-<body>
-<div class="app-layout">
-  <header class="topbar">
-    <div class="brand-container">
-      <button class="hamburger-btn" type="button">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-      </button>
-      <span class="brand-name">DocuBiz</span>
-    </div>
-    <div class="search-bar">
-      <input type="text" id="eventSearch" placeholder="Search events...">
-      <button type="button" class="search-btn" id="searchBtn">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-      </button>
-    </div>
-    <div class="topbar-actions">
-      <a href="settings.php" class="icon-btn" aria-label="Settings">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0l.06.06a2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-      </a>
-      <button class="icon-btn" type="button" aria-label="Notifications">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-      </button>
-      <div class="user-profile">
-        <?php
-        $displayName = trim(
-            $_SESSION["user_name"] ??
-            $_SESSION["full_name"] ??
-            $_SESSION["user_email"] ??
-            $_SESSION["email"] ??
-            "User"
-        );
-        if ($displayName === "") {
-            $displayName = "User";
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocuBiz - Calendar</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="project_modal.css">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
-        $displayRole = ($userRoleSession === "admin") ? "Admin Staff" : "User";
-        $avatarText = strtoupper(substr($displayName, 0, 2));
-        ?>
-        <div class="profile-avatar">
-          <?php echo calendarEscape($avatarText); ?>
+
+        body {
+            background-color: #d8dcdb;
+            color: #333;
+            min-height: 100vh;
+        }
+
+        .app-layout {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .topbar {
+            background-color: #122b49;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            color: #ffffff;
+        }
+
+        .brand-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            width: 200px;
+        }
+
+        .hamburger-btn {
+            background: none;
+            border: none;
+            color: #ffffff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+
+        .brand-name {
+            font-size: 1.4rem;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        .search-bar {
+            position: relative;
+            width: 450px;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-bar input {
+            width: 100%;
+            padding: 8px 45px 8px 16px;
+            border-radius: 20px;
+            border: none;
+            outline: none;
+            background-color: #ffffff;
+            font-size: 0.85rem;
+            color: #2d3748;
+        }
+
+        .search-bar input::placeholder {
+            color: #8fa0b5;
+        }
+
+        .search-btn {
+            position: absolute;
+            right: 12px;
+            background: none;
+            border: none;
+            color: #122b49;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+        }
+
+        .icon-btn {
+            background: none;
+            border: none;
+            color: #ffffff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            opacity: 0.9;
+            text-decoration: none;
+        }
+
+        .icon-btn:hover {
+            opacity: 1;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: 10px;
+        }
+
+        .profile-avatar {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background-color: #2b5585;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .profile-info {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.2;
+        }
+
+        .user-name {
+            font-size: 0.82rem;
+            font-weight: 500;
+        }
+
+        .user-role {
+            font-size: 0.72rem;
+            color: #9bb3d1;
+        }
+
+        .logout-btn {
+            color: #ffffff;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 400;
+            opacity: 0.9;
+            transition: opacity 0.2s;
+            margin-left: 5px;
+        }
+
+        .logout-btn:hover {
+            opacity: 1;
+            text-decoration: underline;
+        }
+
+        .main-body {
+            display: flex;
+            flex: 1;
+        }
+
+        .sidebar {
+            width: 210px;
+            background-color: #122b49;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+
+            /* Sidebar layout */
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-menu {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: calc(100vh - 75px);
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 20px;
+            color: #b0c4de;
+            text-decoration: none;
+            font-size: 0.88rem;
+            transition: all 0.2s ease;
+        }
+
+        .menu-item:hover {
+            color: #ffffff;
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .menu-item.active {
+            color: #ffffff;
+            background-color: #274b73;
+        }
+
+        /* LOGOUT AT THE BOTTOM OF SIDEBAR */
+
+        .sidebar-logout {
+            margin-top: auto;
+            color: #ffffff !important;
+            text-decoration: none !important;
+        }
+
+        .sidebar-logout span {
+            color: #ffffff !important;
+        }
+
+        .sidebar-logout:hover {
+            color: #ffffff !important;
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .content-area {
+            flex: 1;
+            padding: 30px 40px;
+            background-color: #d5dad9;
+        }
+
+        .page-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .page-title {
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: #2a343d;
+            line-height: 1.1;
+        }
+
+        .page-subtitle {
+            font-size: 0.82rem;
+            color: #637381;
+            margin-top: 4px;
+        }
+
+        .btn-add-event {
+            background-color: #72dbd9;
+            color: #1a365d;
+            border: none;
+            border-radius: 18px;
+            padding: 8px 18px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            transition: transform 0.1s ease, background-color 0.2s ease;
+        }
+
+        .btn-add-event:hover {
+            background-color: #5ececb;
+        }
+
+        .calendar-grid-container {
+            display: flex;
+            gap: 25px;
+        }
+
+        .left-calendar-section {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .right-events-section {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .calendar-control-bar {
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+        }
+
+        .month-nav {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .nav-arrow {
+            background: none;
+            border: none;
+            font-size: 1rem;
+            color: #4a5568;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .current-month {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .btn-today {
+            background: none;
+            border: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #2d3748;
+            cursor: pointer;
+        }
+
+        .full-calendar-card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+        }
+
+        .calendar-table-header {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            text-align: center;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #4a5568;
+            padding-bottom: 15px;
+        }
+
+        .calendar-month-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            border-top: 1px solid #edf2f7;
+            border-left: 1px solid #edf2f7;
+        }
+
+        .day-box {
+            min-height: 85px;
+            border-right: 1px solid #edf2f7;
+            border-bottom: 1px solid #edf2f7;
+            padding: 6px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .day-number {
+            font-size: 0.78rem;
+            color: #2d3748;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .event-badge {
+            font-size: 0.62rem;
+            padding: 3px 4px;
+            border-radius: 4px;
+            color: #2d3748;
+            line-height: 1.1;
+            font-weight: 500;
+        }
+
+        button.event-badge {
+            border: 0;
+            text-align: left;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 3px;
+            overflow-wrap: anywhere;
+        }
+
+        .badge-project {
+            background: #91d3d1;
+        }
+
+        .badge-cancelled {
+            background: #fce3e3;
+            color: #991b1b;
+        }
+
+        .calendar-entry-link {
+            border: 0;
+            background: none;
+            color: inherit;
+            text-align: left;
+            cursor: pointer;
+            font: inherit;
+            font-weight: 600;
+            overflow-wrap: anywhere;
+        }
+
+        .calendar-entry-link:hover {
+            text-decoration: underline;
+        }
+
+        #calendarEventDetails {
+            margin: auto;
+        }
+
+        #calendarEventDetails dl {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        #calendarEventDetails dt {
+            font-weight: 600;
+            font-size: .78rem;
+        }
+
+        #calendarEventDetails dd {
+            font-size: .85rem;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        #calendarEventDetails .detail-wide {
+            grid-column: 1/-1;
+        }
+
+        .calendar-legend {
+            flex-wrap: wrap;
+        }
+
+        .badge-catering {
+            background-color: #d8b4fe;
+        }
+
+        .badge-inventory {
+            background-color: #fca5a5;
+        }
+
+        .badge-meeting {
+            background-color: #86efac;
+        }
+
+        .badge-other {
+            background-color: #9ca3af;
+        }
+
+        .calendar-legend {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 5px 0;
+            font-size: 0.75rem;
+            color: #4a5568;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .dot-catering {
+            background-color: #d8b4fe;
+        }
+
+        .dot-inventory {
+            background-color: #fca5a5;
+        }
+
+        .dot-meeting {
+            background-color: #86efac;
+        }
+
+        .dot-other {
+            background-color: #9ca3af;
+        }
+
+        .card {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 22px 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #edf2f7;
+            padding-bottom: 12px;
+        }
+
+        .card-header h2 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .view-all {
+            font-size: 0.8rem;
+            color: #63b3ed;
+            text-decoration: none;
+        }
+
+        .upcoming-events-list {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .upcoming-event-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .date-badge {
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #2d3748;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+
+        .date-badge .month {
+            font-size: 0.7rem;
+        }
+
+        .date-badge .day {
+            font-size: 1rem;
+            margin-top: 3px;
+        }
+
+        .event-details {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .event-details h3 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .event-details .meta {
+            font-size: 0.72rem;
+            color: #718096;
+            margin-top: 3px;
+        }
+
+        .event-details .location {
+            font-size: 0.72rem;
+            color: #a0aec0;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.25s ease, visibility 0.25s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-container {
+            width: 100%;
+            max-width: 560px;
+            background-color: #ffffff;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transform: scale(0.92);
+            transition: transform 0.25s ease;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-overlay.active .modal-container {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            background-color: #122b49;
+            padding: 16px 24px;
+            color: #ffffff;
+        }
+
+        .modal-header h2 {
+            font-size: 1.35rem;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+        }
+
+        .modal-body {
+            padding: 24px 28px;
+        }
+
+        .modal-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px 24px;
+        }
+
+        .form-field {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .form-field label {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #122b49;
+            margin-bottom: 6px;
+        }
+
+        .form-field input,
+        .form-field select,
+        .form-field textarea {
+            width: 100%;
+            padding: 9px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            color: #2d3748;
+            outline: none;
+            background-color: #ffffff;
+        }
+
+        .form-field input[type="date"],
+        .form-field input[type="time"] {
+            color: #4a5568;
+            cursor: pointer;
+        }
+
+        .form-field input::placeholder,
+        .form-field textarea::placeholder {
+            color: #cbd5e0;
+        }
+
+        .form-field select {
+            color: #a0aec0;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http\://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a0aec0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            background-size: 14px;
+        }
+
+        .form-field textarea {
+            resize: none;
+            height: 80px;
+        }
+
+        .modal-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .btn-modal-cancel {
+            padding: 8px 22px;
+            border: 1px solid #e2e8f0;
+            background-color: #ffffff;
+            color: #4a5568;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .btn-modal-save {
+            padding: 8px 20px;
+            border: none;
+            background-color: #72dbd9;
+            color: #1a365d;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        @media (max-width: 900px) {
+            .calendar-grid-container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 60px;
+            }
+
+            .sidebar .menu-item span {
+                display: none;
+            }
+
+            .search-bar {
+                width: 200px;
+            }
+
+            .modal-form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* LOGOUT CONFIRMATION MODAL */
+
+        .logout-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: rgba(10, 25, 45, 0.55);
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .logout-modal.show {
+            display: flex;
+        }
+
+        .logout-modal-content {
+            width: 100%;
+            max-width: 380px;
+            background: #ffffff;
+            border-radius: 14px;
+            padding: 28px;
+            text-align: center;
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.2);
+            animation: logoutPop 0.2s ease;
+        }
+
+        @keyframes logoutPop {
+            from {
+                opacity: 0;
+                transform: scale(0.94);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .logout-modal-icon {
+            width: 58px;
+            height: 58px;
+            margin: 0 auto 16px;
+            border-radius: 50%;
+            background: #e8eef5;
+            color: #122b49;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logout-modal-content h2 {
+            color: #122b49;
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .logout-modal-content p {
+            color: #718096;
+            font-size: 0.84rem;
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+
+        .logout-modal-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .logout-cancel,
+        .logout-confirm {
+            flex: 1;
+            padding: 10px 14px;
+            border-radius: 7px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s ease;
+        }
+
+        .logout-cancel {
+            background: #edf1f5;
+            color: #122b49;
+            border: 1px solid #d7dfe8;
+        }
+
+        .logout-cancel:hover {
+            background: #dfe6ee;
+        }
+
+        .logout-confirm {
+            background: #122b49;
+            color: #ffffff;
+            border: 1px solid #122b49;
+        }
+
+        .logout-confirm:hover {
+            background: #274b73;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="app-layout">
+
+    <header class="topbar">
+
+        <div class="brand-container">
+            <button class="hamburger-btn" type="button">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+
+            <span class="brand-name">DocuBiz</span>
         </div>
-        <div class="profile-info">
-          <span class="user-name"><?php echo calendarEscape($displayName); ?></span>
-          <span class="user-role"><?php echo calendarEscape($displayRole); ?></span>
+
+        <div class="search-bar">
+            <input type="text" id="eventSearch" placeholder="Search events...">
+
+            <button type="button" class="search-btn" id="searchBtn">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+            </button>
         </div>
-      </div>
-      <a href="logout.php" class="logout-btn">Log Out</a>
-    </div>
-  </header>
-  <div class="main-body">
-    <aside class="sidebar">
-      <nav class="sidebar-menu">
-        <a href="dashboard.php" class="menu-item">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-          <span>Dashboard</span>
-        </a>
-        <a href="messages.php" class="menu-item">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-          <span>Messages</span>
-        </a>
-        <a href="calendar.php" class="menu-item active">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-          <span>Calendar</span>
-        </a>
-        <a href="projects.php" class="menu-item">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-          <span>Projects</span>
-        </a>
-        <a href="inventory.php" class="menu-item">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
-          <span>Inventory</span>
-        </a>
-        <a href="documents.php" class="menu-item">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-          <span>Documents</span>
-        </a>
-      <?php if (($_SESSION["user_role"] ?? $_SESSION["role"] ?? "user") === "admin"): ?>
-        <a href="staff_management.php" class="menu-item">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                <circle cx="9" cy="7" r="4"></circle>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-            </svg>
-            <span>Staff Management</span>
-        </a>
-      <?php endif; ?>
-<?php if ($isAdmin): ?>
-<a href="finances.php" class="menu-item">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
-    <span>Finances</span>
-</a>
-<?php endif; ?>
-      </nav>
-    </aside>
-    <main class="content-area">
-      <div class="page-header">
-        <div>
-          <h1 class="page-title">Calendar</h1>
-          <p class="page-subtitle">View events and projects. Projects without dates are available under View All.</p>
-        </div>
-        <button class="btn-add-event" id="openModalBtn" type="button">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          Add Event
-        </button>
-      </div>
-      <div class="calendar-grid-container">
-        <div class="left-calendar-section">
-          <div class="calendar-control-bar">
-            <div class="month-nav">
-              <a class="nav-arrow" href="calendar.php?month=<?php echo $prevMonth; ?>&year=<?php echo $prevYear; ?>" aria-label="Previous month" style="text-decoration:none">&lt;</a>
-              <span class="current-month"><?php echo calendarEscape($currentMonthLabel); ?></span>
-              <a class="nav-arrow" href="calendar.php?month=<?php echo $nextMonth; ?>&year=<?php echo $nextYear; ?>" aria-label="Next month" style="text-decoration:none">&gt;</a>
-            </div>
-            <a class="btn-today" href="calendar.php" style="text-decoration:none">Today</a>
-          </div>
-          <div class="full-calendar-card">
-            <div class="calendar-table-header">
-              <span>Sun</span>
-              <span>Mon</span>
-              <span>Tue</span>
-              <span>Wed</span>
-              <span>Thu</span>
-              <span>Fri</span>
-              <span>Sat</span>
-            </div>
-            <div class="calendar-month-grid">
-              <?php
-              for ($blank = 0; $blank < $firstWeekday; $blank++) {
-                  echo '<div class="day-box"></div>';
-              }
-              for ($day = 1; $day <= $daysInMonth; $day++) {
-                  $dateKey = sprintf("%04d-%02d-%02d", $year, $month, $day);
-                  echo '<div class="day-box">';
-                  echo '<span class="day-number">' . $day . '</span>';
-                  if (!empty($eventsByDate[$dateKey])) {
-                      foreach ($eventsByDate[$dateKey] as $calendarEvent) {
-                          echo '<button type="button" class="event-badge ' . entryClass($calendarEvent) . '" ' . entryAttributes($calendarEvent) . ' title="' . calendarEscape(entryTitle($calendarEvent)) . '">' . calendarEscape(entryTitle($calendarEvent)) . '</button>';
-                      }
-                  }
-                  echo '</div>';
-              }
-              $totalCells = $firstWeekday + $daysInMonth;
-              $trailingBlanks = (7 - ($totalCells % 7)) % 7;
-              for ($blank = 0; $blank < $trailingBlanks; $blank++) {
-                  echo '<div class="day-box"></div>';
-              }
-              ?>
-            </div>
-          </div>
-          <div class="calendar-legend">
-            <div class="legend-item"><span class="legend-dot badge-project"></span><span>Project</span></div>
-            <div class="legend-item"><span class="legend-dot badge-cancelled"></span><span>Cancelled project</span></div>
-            <div class="legend-item"><span class="legend-dot dot-catering"></span><span>Catering Event</span></div>
-            <div class="legend-item"><span class="legend-dot dot-inventory"></span><span>Inventory Restock</span></div>
-            <div class="legend-item"><span class="legend-dot dot-meeting"></span><span>Meeting</span></div>
-            <div class="legend-item"><span class="legend-dot dot-other"></span><span>Other</span></div>
-          </div>
-        </div>
-        <div class="right-events-section">
-          <div class="card">
-            <div class="card-header">
-              <h2><?php echo $showAll ? "All Events & Projects" : "Upcoming Events & Projects"; ?></h2>
-              <?php if ($showAll): ?>
-                <a href="calendar.php?month=<?= $month ?>&amp;year=<?= $year ?>" class="view-all">Back</a>
-              <?php else: ?>
-                <a href="calendar.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>&view=all" class="view-all">View All</a>
-              <?php endif; ?>
-            </div>
-            <div class="upcoming-events-list" id="upcoming-events">
-              <?php $visibleEntries = $showAll ? $allEntriesNewestFirst : $upcomingEvents; ?>
-              <?php if (!$visibleEntries): ?>
-                <p style="font-size:.82rem;color:#718096;">No scheduled entries.</p>
-              <?php endif; ?>
-              <?php foreach ($visibleEntries as $entry): ?>
-                <div class="upcoming-event-item searchable-event">
-                  <div class="date-badge <?= entryClass($entry) ?>">
-                    <span class="month"><?= $entry['event_date'] ? strtoupper(date('M', strtotime($entry['event_date']))) : 'TBD' ?></span>
-                    <span class="day"><?= $entry['event_date'] ? date('d', strtotime($entry['event_date'])) : '—' ?></span>
-                  </div>
-                  <div class="event-details">
-                    <h3><button type="button" class="calendar-entry-link" <?= entryAttributes($entry) ?>><?= calendarEscape(entryTitle($entry)) ?></button></h3>
-                    <span class="meta"><?= calendarEscape($entry['event_date'] ? date('M d, Y', strtotime($entry['event_date'])) : 'Date not set') ?> · <?= calendarEscape(entryTime($entry['start_time'])) ?><?php if ($entry['end_time']): ?> – <?= calendarEscape(entryTime($entry['end_time'])) ?><?php endif; ?></span>
-                    <span class="location"><?= calendarEscape($entry['location'] ?: ($entry['source'] === 'project' ? $entry['event_type'] : eventTypeLabel($entry['event_type']))) ?></span>
-                    <?php if ($entry['source'] === 'project'): ?><span class="meta"><?= calendarEscape($entry['status']) ?></span><?php endif; ?>
-                  </div>
+
+        <div class="topbar-actions">
+
+            <a href="settings.php" class="icon-btn" aria-label="Settings">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a2 2 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0l.06.06a2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a2 2 0 0 0-1.51 1z"></path>
+                </svg>
+            </a>
+
+            <button class="icon-btn" type="button" aria-label="Notifications">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+            </button>
+
+            <div class="user-profile">
+
+                <?php
+                $displayName = trim(
+                    $_SESSION["user_name"] ??
+                    $_SESSION["full_name"] ??
+                    $_SESSION["user_email"] ??
+                    $_SESSION["email"] ??
+                    "User"
+                );
+
+                if ($displayName === "") {
+                    $displayName = "User";
+                }
+
+                $displayRole = ($userRoleSession === "admin") ? "Admin Staff" : "User";
+                $avatarText = strtoupper(substr($displayName, 0, 2));
+                ?>
+
+                <div class="profile-avatar">
+                    <?php echo calendarEscape($avatarText); ?>
                 </div>
-              <?php endforeach; ?>
+
+                <div class="profile-info">
+                    <span class="user-name"><?php echo calendarEscape($displayName); ?></span>
+                    <span class="user-role"><?php echo calendarEscape($displayRole); ?></span>
+                </div>
+
             </div>
-          </div>
         </div>
-      </div>
-    </main>
-  </div>
+    </header>
+
+    <div class="main-body">
+
+        <aside class="sidebar">
+
+            <nav class="sidebar-menu">
+
+                <a href="dashboard.php" class="menu-item">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                    </svg>
+                    <span>Dashboard</span>
+                </a>
+
+                <a href="messages.php" class="menu-item">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <span>Messages</span>
+                </a>
+
+                <a href="calendar.php" class="menu-item active">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                    <span>Calendar</span>
+                </a>
+
+                <a href="projects.php" class="menu-item">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <span>Projects</span>
+                </a>
+
+                <a href="inventory.php" class="menu-item">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    </svg>
+                    <span>Inventory</span>
+                </a>
+
+                <a href="documents.php" class="menu-item">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg>
+                    <span>Documents</span>
+                </a>
+
+                <?php if (($_SESSION["user_role"] ?? $_SESSION["role"] ?? "user") === "admin"): ?>
+
+                    <a href="staff_management.php" class="menu-item">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                        <span>Staff Management</span>
+                    </a>
+
+                <?php endif; ?>
+
+                <?php if ($isAdmin): ?>
+
+                    <a href="finances.php" class="menu-item">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                        <span>Finances</span>
+                    </a>
+
+                <?php endif; ?>
+
+                <!-- LOGOUT BUTTON: BOTTOM OF SIDEBAR -->
+
+                <a href="#" class="menu-item sidebar-logout" id="logoutButton">
+                    <svg width="18" height="18" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                    <span>Log Out</span>
+                </a>
+
+            </nav>
+
+        </aside>
+
+        <main class="content-area">
+
+            <div class="page-header">
+
+                <div>
+                    <h1 class="page-title">Calendar</h1>
+                    <p class="page-subtitle">View events and projects. Projects without dates are available under View All.</p>
+                </div>
+
+                <button class="btn-add-event" id="openModalBtn" type="button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Add Event
+                </button>
+
+            </div>
+
+            <div class="calendar-grid-container">
+
+                <div class="left-calendar-section">
+
+                    <div class="calendar-control-bar">
+
+                        <div class="month-nav">
+
+                            <a class="nav-arrow"
+                               href="calendar.php?month=<?php echo $prevMonth; ?>&year=<?php echo $prevYear; ?>"
+                               aria-label="Previous month"
+                               style="text-decoration:none">&lt;</a>
+
+                            <span class="current-month">
+                                <?php echo calendarEscape($currentMonthLabel); ?>
+                            </span>
+
+                            <a class="nav-arrow"
+                               href="calendar.php?month=<?php echo $nextMonth; ?>&year=<?php echo $nextYear; ?>"
+                               aria-label="Next month"
+                               style="text-decoration:none">&gt;</a>
+
+                        </div>
+
+                        <a class="btn-today" href="calendar.php" style="text-decoration:none">Today</a>
+
+                    </div>
+
+                    <div class="full-calendar-card">
+
+                        <div class="calendar-table-header">
+                            <span>Sun</span>
+                            <span>Mon</span>
+                            <span>Tue</span>
+                            <span>Wed</span>
+                            <span>Thu</span>
+                            <span>Fri</span>
+                            <span>Sat</span>
+                        </div>
+
+                        <div class="calendar-month-grid">
+
+                            <?php
+
+                            for ($blank = 0; $blank < $firstWeekday; $blank++) {
+                                echo '<div class="day-box"></div>';
+                            }
+
+                            for ($day = 1; $day <= $daysInMonth; $day++) {
+
+                                $dateKey = sprintf("%04d-%02d-%02d", $year, $month, $day);
+
+                                echo '<div class="day-box">';
+                                echo '<span class="day-number">' . $day . '</span>';
+
+                                if (!empty($eventsByDate[$dateKey])) {
+
+                                    foreach ($eventsByDate[$dateKey] as $calendarEvent) {
+
+                                        echo '<button type="button" class="event-badge ' .
+                                            entryClass($calendarEvent) . '" ' .
+                                            entryAttributes($calendarEvent) .
+                                            ' title="' . calendarEscape(entryTitle($calendarEvent)) . '">' .
+                                            calendarEscape(entryTitle($calendarEvent)) .
+                                            '</button>';
+                                    }
+                                }
+
+                                echo '</div>';
+                            }
+
+                            $totalCells = $firstWeekday + $daysInMonth;
+                            $trailingBlanks = (7 - ($totalCells % 7)) % 7;
+
+                            for ($blank = 0; $blank < $trailingBlanks; $blank++) {
+                                echo '<div class="day-box"></div>';
+                            }
+
+                            ?>
+
+                        </div>
+                    </div>
+
+                    <div class="calendar-legend">
+
+                        <div class="legend-item">
+                            <span class="legend-dot badge-project"></span>
+                            <span>Project</span>
+                        </div>
+
+                        <div class="legend-item">
+                            <span class="legend-dot badge-cancelled"></span>
+                            <span>Cancelled project</span>
+                        </div>
+
+                        <div class="legend-item">
+                            <span class="legend-dot dot-catering"></span>
+                            <span>Catering Event</span>
+                        </div>
+
+                        <div class="legend-item">
+                            <span class="legend-dot dot-inventory"></span>
+                            <span>Inventory Restock</span>
+                        </div>
+
+                        <div class="legend-item">
+                            <span class="legend-dot dot-meeting"></span>
+                            <span>Meeting</span>
+                        </div>
+
+                        <div class="legend-item">
+                            <span class="legend-dot dot-other"></span>
+                            <span>Other</span>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="right-events-section">
+
+                    <div class="card">
+
+                        <div class="card-header">
+
+                            <h2>
+                                <?php echo $showAll ? "All Events & Projects" : "Upcoming Events & Projects"; ?>
+                            </h2>
+
+                            <?php if ($showAll): ?>
+
+                                <a href="calendar.php?month=<?= $month ?>&amp;year=<?= $year ?>" class="view-all">
+                                    Back
+                                </a>
+
+                            <?php else: ?>
+
+                                <a href="calendar.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>&view=all" class="view-all">
+                                    View All
+                                </a>
+
+                            <?php endif; ?>
+
+                        </div>
+
+                        <div class="upcoming-events-list" id="upcoming-events">
+
+                            <?php $visibleEntries = $showAll ? $allEntriesNewestFirst : $upcomingEvents; ?>
+
+                            <?php if (!$visibleEntries): ?>
+
+                                <p style="font-size:.82rem;color:#718096;">
+                                    No scheduled entries.
+                                </p>
+
+                            <?php endif; ?>
+
+                            <?php foreach ($visibleEntries as $entry): ?>
+
+                                <div class="upcoming-event-item searchable-event">
+
+                                    <div class="date-badge <?= entryClass($entry) ?>">
+
+                                        <span class="month">
+                                            <?= $entry['event_date'] ? strtoupper(date('M', strtotime($entry['event_date']))) : 'TBD' ?>
+                                        </span>
+
+                                        <span class="day">
+                                            <?= $entry['event_date'] ? date('d', strtotime($entry['event_date'])) : '—' ?>
+                                        </span>
+
+                                    </div>
+
+                                    <div class="event-details">
+
+                                        <h3>
+                                            <button type="button"
+                                                    class="calendar-entry-link"
+                                                    <?= entryAttributes($entry) ?>>
+                                                <?= calendarEscape(entryTitle($entry)) ?>
+                                            </button>
+                                        </h3>
+
+                                        <span class="meta">
+                                            <?= calendarEscape($entry['event_date'] ? date('M d, Y', strtotime($entry['event_date'])) : 'Date not set') ?>
+                                            ·
+                                            <?= calendarEscape(entryTime($entry['start_time'])) ?>
+
+                                            <?php if ($entry['end_time']): ?>
+                                                – <?= calendarEscape(entryTime($entry['end_time'])) ?>
+                                            <?php endif; ?>
+                                        </span>
+
+                                        <span class="location">
+                                            <?= calendarEscape($entry['location'] ?: ($entry['source'] === 'project' ? $entry['event_type'] : eventTypeLabel($entry['event_type']))) ?>
+                                        </span>
+
+                                        <?php if ($entry['source'] === 'project'): ?>
+                                            <span class="meta">
+                                                <?= calendarEscape($entry['status']) ?>
+                                            </span>
+                                        <?php endif; ?>
+
+                                    </div>
+                                </div>
+
+                            <?php endforeach; ?>
+
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </main>
+
+    </div>
 </div>
+
+<!-- LOGOUT CONFIRMATION POPUP -->
+
+<div class="logout-modal" id="logoutModal">
+
+    <div class="logout-modal-content">
+
+        <div class="logout-modal-icon">
+
+            <svg width="28" height="28" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round"
+                 stroke-linejoin="round">
+
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+
+            </svg>
+
+        </div>
+
+        <h2>Log Out?</h2>
+
+        <p>Are you sure you want to log out of your DocuBiz account?</p>
+
+        <div class="logout-modal-actions">
+
+            <button type="button" class="logout-cancel" id="cancelLogout">
+                Cancel
+            </button>
+
+            <button type="button" class="logout-confirm" id="confirmLogout">
+                Yes, Log Out
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
 <?php require __DIR__.'/calendar_event_form.php'; ?>
-<style>#calendarEditEvent[hidden], #calendarDeleteEvent[hidden] { display: none !important; }</style>
+
+<style>
+    #calendarEditEvent[hidden],
+    #calendarDeleteEvent[hidden] {
+        display: none !important;
+    }
+</style>
+
 <dialog id="calendarEventDetails" class="db-modal" aria-labelledby="calendarDetailTitle">
-  <div class="db-header"><h2 id="calendarDetailTitle">Event Details</h2><button type="button" id="calendarCloseDetails" aria-label="Close">×</button></div>
-  <dl id="calendarDetailFields"></dl>
-  <div class="db-actions">
-    <button type="button" class="db-outline" id="calendarCloseDetailsBottom">Close</button>
-    <button type="button" class="db-next" id="calendarEditEvent" hidden>Edit Event</button>
-      <form method="POST" id="calendarDeleteEvent" hidden>
-        <input type="hidden" name="csrf" value="<?= calendarEscape($_SESSION['calendar_csrf']) ?>">
-        <input type="hidden" name="form_action" value="delete_event">
-        <input type="hidden" name="event_id" id="calendarDeleteId">
-        <button type="submit" class="db-outline">Delete Event</button>
-      </form>
-  </div>
+
+    <div class="db-header">
+        <h2 id="calendarDetailTitle">Event Details</h2>
+        <button type="button" id="calendarCloseDetails" aria-label="Close">×</button>
+    </div>
+
+    <dl id="calendarDetailFields"></dl>
+
+    <div class="db-actions">
+
+        <button type="button" class="db-outline" id="calendarCloseDetailsBottom">
+            Close
+        </button>
+
+        <button type="button" class="db-next" id="calendarEditEvent" hidden>
+            Edit Event
+        </button>
+
+        <form method="POST" id="calendarDeleteEvent" hidden>
+
+            <input type="hidden" name="csrf" value="<?= calendarEscape($_SESSION['calendar_csrf']) ?>">
+
+            <input type="hidden" name="form_action" value="delete_event">
+
+            <input type="hidden" name="event_id" id="calendarDeleteId">
+
+            <button type="submit" class="db-outline">
+                Delete Event
+            </button>
+
+        </form>
+
+    </div>
+
 </dialog>
+
 <?php require __DIR__ . '/project_modal.php'; ?>
+
+<!-- ALL JAVASCRIPT: ONE SCRIPT BLOCK ONLY -->
+
 <script>
-  const openModalBtn = document.getElementById('openModalBtn');
-  const closeModalBtn = document.getElementById('closeModalBtn');
-  const modalOverlay = document.getElementById('addEventModal');
-  const eventSearch = document.getElementById('eventSearch');
-  const searchBtn = document.getElementById('searchBtn');
-  const eventForm = document.getElementById('eventForm');
-  const formAction = document.getElementById('formAction');
-  const eventId = document.getElementById('event_id');
-  const modalTitle = document.getElementById('modalTitle');
-  const saveModalBtn = document.getElementById('saveModalBtn');
-  const fields = {
-    name: document.getElementById('event_name'),
-    date: document.getElementById('event_date'),
-    start: document.getElementById('start_time'),
-    end: document.getElementById('end_time'),
-    type: document.getElementById('event_type'),
-    location: document.getElementById('location'),
-    description: document.getElementById('description'),
-    staff: document.getElementById('assigned_staff'),
-    notes: document.getElementById('notes')
-  };
-  function openAddModal() {
-    eventForm.reset();
-    formAction.value = 'add_event';
-    eventId.value = '';
-    modalTitle.textContent = 'Add Event';
-    saveModalBtn.textContent = 'Save Event';
-    modalOverlay.classList.add('active');
-  }
-  function openEditModal(record) {
-    if (!eventForm || record.can_edit !== true) return;
-    const button = {dataset: {id: record.id, name: record.event_name, date: record.event_date, start: (record.start_time || '').slice(0,5), end: (record.end_time || '').slice(0,5), type: record.event_type, location: record.location, description: record.description, staff: record.assigned_staff, notes: record.notes}};
-    formAction.value = 'update_event';
-    eventId.value = button.dataset.id;
-    fields.name.value = button.dataset.name || '';
-    fields.date.value = button.dataset.date || '';
-    fields.start.value = button.dataset.start || '';
-    fields.end.value = button.dataset.end || '';
-    fields.type.value = button.dataset.type || 'other';
-    fields.location.value = button.dataset.location || '';
-    fields.description.value = button.dataset.description || '';
-    fields.staff.value = button.dataset.staff || '';
-    fields.notes.value = button.dataset.notes || '';
-    modalTitle.textContent = 'Edit Event';
-    saveModalBtn.textContent = 'Update Event';
-    modalOverlay.classList.add('active');
-  }
-  openModalBtn?.addEventListener('click', openAddModal);
-  if(new URLSearchParams(location.search).get('add')==='1' && !modalOverlay.classList.contains('active')) openAddModal();
-  closeModalBtn?.addEventListener('click', () => modalOverlay.classList.remove('active'));
-  modalOverlay?.addEventListener('click', e => { if (e.target === modalOverlay) modalOverlay.classList.remove('active'); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') modalOverlay?.classList.remove('active'); });
-  const eventDetailsDialog = document.getElementById('calendarEventDetails');
-  let currentEvent = null;
-  function displayTime(value) {
-    if (!value) return 'Not set';
-    const [h,m] = value.split(':').map(Number);
-    return `${h % 12 || 12}:${String(m).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`;
-  }
-  document.addEventListener('click', e => {
-    const button = e.target.closest('[data-calendar-event]');
-    if (!button) return;
-    currentEvent = JSON.parse(button.dataset.calendarEvent);
-    const types = {catering:'Catering Event', inventory:'Inventory Restock', meeting:'Meeting', other:'Other'};
-    const list = document.getElementById('calendarDetailFields');
-    list.replaceChildren();
-    for (const [label,value,wide] of [
-      ['Event Name', currentEvent.event_name,true], ['Date',currentEvent.event_date],
-      ['Event Type',types[currentEvent.event_type] || currentEvent.event_type],
-      ['Start Time',displayTime(currentEvent.start_time)], ['End Time',displayTime(currentEvent.end_time)],
-      ['Location',currentEvent.location,true], ['Assigned Staff',currentEvent.assigned_staff,true],
-      ['Event Description',currentEvent.description,true], ['Notes',currentEvent.notes,true]
-    ]) {
-      const group=document.createElement('div'); if(wide) group.className='detail-wide';
-      const dt=document.createElement('dt'),dd=document.createElement('dd');
-      dt.textContent=label; dd.textContent=value || 'Not set'; group.append(dt,dd); list.append(group);
+
+    const openModalBtn = document.getElementById('openModalBtn');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const modalOverlay = document.getElementById('addEventModal');
+
+    const eventSearch = document.getElementById('eventSearch');
+    const searchBtn = document.getElementById('searchBtn');
+
+    const eventForm = document.getElementById('eventForm');
+    const formAction = document.getElementById('formAction');
+    const eventId = document.getElementById('event_id');
+
+    const modalTitle = document.getElementById('modalTitle');
+    const saveModalBtn = document.getElementById('saveModalBtn');
+
+    const fields = {
+        name: document.getElementById('event_name'),
+        date: document.getElementById('event_date'),
+        start: document.getElementById('start_time'),
+        end: document.getElementById('end_time'),
+        type: document.getElementById('event_type'),
+        location: document.getElementById('location'),
+        description: document.getElementById('description'),
+        staff: document.getElementById('assigned_staff'),
+        notes: document.getElementById('notes')
+    };
+
+    function openAddModal() {
+
+        eventForm.reset();
+
+        formAction.value = 'add_event';
+        eventId.value = '';
+
+        modalTitle.textContent = 'Add Event';
+        saveModalBtn.textContent = 'Save Event';
+
+        modalOverlay.classList.add('active');
     }
-    const deleteId=document.getElementById('calendarDeleteId'); if(deleteId) deleteId.value=currentEvent.id;
-    document.getElementById("calendarEditEvent").hidden = currentEvent.can_edit !== true;
-    document.getElementById("calendarDeleteEvent").hidden = currentEvent.can_edit !== true;
-    eventDetailsDialog.showModal();
-  });
-  document.getElementById('calendarCloseDetails').onclick = () => eventDetailsDialog.close();
-  document.getElementById('calendarCloseDetailsBottom').onclick = () => eventDetailsDialog.close();
-  document.getElementById('calendarEditEvent')?.addEventListener('click', () => { if(currentEvent?.can_edit === true){ eventDetailsDialog.close(); openEditModal(currentEvent); } });
-  document.getElementById('calendarDeleteEvent')?.addEventListener('submit', e => { if(currentEvent?.can_edit !== true || !confirm('Delete this event? This cannot be undone.')) e.preventDefault(); });
-  function searchEvents() {
-    const searchValue = eventSearch.value.trim().toLowerCase();
-    document.querySelectorAll('.event-badge').forEach(function(badge) {
-      badge.style.display = badge.textContent.toLowerCase().includes(searchValue) ? '' : 'none';
-    });
-    document.querySelectorAll('.searchable-event').forEach(function(item) {
-      item.style.display = item.textContent.toLowerCase().includes(searchValue) ? '' : 'none';
-    });
-  }
-  searchBtn.addEventListener('click', searchEvents);
-  eventSearch.addEventListener('input', searchEvents);
-  eventSearch.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      searchEvents();
+
+    function openEditModal(record) {
+
+        if (!eventForm || record.can_edit !== true) return;
+
+        const button = {
+            dataset: {
+                id: record.id,
+                name: record.event_name,
+                date: record.event_date,
+                start: (record.start_time || '').slice(0,5),
+                end: (record.end_time || '').slice(0,5),
+                type: record.event_type,
+                location: record.location,
+                description: record.description,
+                staff: record.assigned_staff,
+                notes: record.notes
+            }
+        };
+
+        formAction.value = 'update_event';
+        eventId.value = button.dataset.id;
+
+        fields.name.value = button.dataset.name || '';
+        fields.date.value = button.dataset.date || '';
+        fields.start.value = button.dataset.start || '';
+        fields.end.value = button.dataset.end || '';
+        fields.type.value = button.dataset.type || 'other';
+        fields.location.value = button.dataset.location || '';
+        fields.description.value = button.dataset.description || '';
+        fields.staff.value = button.dataset.staff || '';
+        fields.notes.value = button.dataset.notes || '';
+
+        modalTitle.textContent = 'Edit Event';
+        saveModalBtn.textContent = 'Update Event';
+
+        modalOverlay.classList.add('active');
     }
-  });
+
+    openModalBtn?.addEventListener('click', openAddModal);
+
+    if (
+        new URLSearchParams(location.search).get('add') === '1' &&
+        modalOverlay &&
+        !modalOverlay.classList.contains('active')
+    ) {
+        openAddModal();
+    }
+
+    closeModalBtn?.addEventListener('click', () => {
+        modalOverlay.classList.remove('active');
+    });
+
+    modalOverlay?.addEventListener('click', e => {
+
+        if (e.target === modalOverlay) {
+            modalOverlay.classList.remove('active');
+        }
+
+    });
+
+    document.addEventListener('keydown', e => {
+
+        if (e.key === 'Escape') {
+            modalOverlay?.classList.remove('active');
+        }
+
+    });
+
+    const eventDetailsDialog = document.getElementById('calendarEventDetails');
+
+    let currentEvent = null;
+
+    function displayTime(value) {
+
+        if (!value) return 'Not set';
+
+        const [h, m] = value.split(':').map(Number);
+
+        return `${h % 12 || 12}:${String(m).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`;
+    }
+
+    document.addEventListener('click', e => {
+
+        const button = e.target.closest('[data-calendar-event]');
+
+        if (!button) return;
+
+        currentEvent = JSON.parse(button.dataset.calendarEvent);
+
+        const types = {
+            catering: 'Catering Event',
+            inventory: 'Inventory Restock',
+            meeting: 'Meeting',
+            other: 'Other'
+        };
+
+        const list = document.getElementById('calendarDetailFields');
+
+        list.replaceChildren();
+
+        for (const [label, value, wide] of [
+
+            ['Event Name', currentEvent.event_name, true],
+            ['Date', currentEvent.event_date],
+            ['Event Type', types[currentEvent.event_type] || currentEvent.event_type],
+            ['Start Time', displayTime(currentEvent.start_time)],
+            ['End Time', displayTime(currentEvent.end_time)],
+            ['Location', currentEvent.location, true],
+            ['Assigned Staff', currentEvent.assigned_staff, true],
+            ['Event Description', currentEvent.description, true],
+            ['Notes', currentEvent.notes, true]
+
+        ]) {
+
+            const group = document.createElement('div');
+
+            if (wide) {
+                group.className = 'detail-wide';
+            }
+
+            const dt = document.createElement('dt');
+            const dd = document.createElement('dd');
+
+            dt.textContent = label;
+            dd.textContent = value || 'Not set';
+
+            group.append(dt, dd);
+            list.append(group);
+        }
+
+        const deleteId = document.getElementById('calendarDeleteId');
+
+        if (deleteId) {
+            deleteId.value = currentEvent.id;
+        }
+
+        document.getElementById("calendarEditEvent").hidden =
+            currentEvent.can_edit !== true;
+
+        document.getElementById("calendarDeleteEvent").hidden =
+            currentEvent.can_edit !== true;
+
+        eventDetailsDialog.showModal();
+
+    });
+
+    document.getElementById('calendarCloseDetails').onclick = () => {
+        eventDetailsDialog.close();
+    };
+
+    document.getElementById('calendarCloseDetailsBottom').onclick = () => {
+        eventDetailsDialog.close();
+    };
+
+    document.getElementById('calendarEditEvent')?.addEventListener('click', () => {
+
+        if (currentEvent?.can_edit === true) {
+
+            eventDetailsDialog.close();
+
+            openEditModal(currentEvent);
+        }
+
+    });
+
+    document.getElementById('calendarDeleteEvent')?.addEventListener('submit', e => {
+
+        if (
+            currentEvent?.can_edit !== true ||
+            !confirm('Delete this event? This cannot be undone.')
+        ) {
+            e.preventDefault();
+        }
+
+    });
+
+    /* EVENT SEARCH */
+
+    function searchEvents() {
+
+        const searchValue = eventSearch.value.trim().toLowerCase();
+
+        document.querySelectorAll('.event-badge').forEach(function(badge) {
+
+            badge.style.display =
+                badge.textContent.toLowerCase().includes(searchValue) ? '' : 'none';
+
+        });
+
+        document.querySelectorAll('.searchable-event').forEach(function(item) {
+
+            item.style.display =
+                item.textContent.toLowerCase().includes(searchValue) ? '' : 'none';
+
+        });
+
+    }
+
+    searchBtn?.addEventListener('click', searchEvents);
+
+    eventSearch?.addEventListener('input', searchEvents);
+
+    eventSearch?.addEventListener('keydown', function(e) {
+
+        if (e.key === 'Enter') {
+
+            e.preventDefault();
+
+            searchEvents();
+        }
+
+    });
+
+    /* LOGOUT CONFIRMATION POPUP */
+
+    const logoutButton = document.getElementById("logoutButton");
+    const logoutModal = document.getElementById("logoutModal");
+    const cancelLogout = document.getElementById("cancelLogout");
+    const confirmLogout = document.getElementById("confirmLogout");
+
+    // Open popup when clicking Logout
+    logoutButton?.addEventListener("click", function(e) {
+
+        e.preventDefault();
+
+        logoutModal?.classList.add("show");
+
+    });
+
+    // Close popup when clicking Cancel
+    cancelLogout?.addEventListener("click", function() {
+
+        logoutModal?.classList.remove("show");
+
+    });
+
+    // Continue to logout.php when confirmed
+    confirmLogout?.addEventListener("click", function() {
+
+        window.location.href = "logout.php";
+
+    });
+
+    // Close popup when clicking outside the modal
+    logoutModal?.addEventListener("click", function(e) {
+
+        if (e.target === logoutModal) {
+
+            logoutModal.classList.remove("show");
+
+        }
+
+    });
+
+    // Close popup using Escape key
+    document.addEventListener("keydown", function(e) {
+
+        if (e.key === "Escape") {
+
+            logoutModal?.classList.remove("show");
+
+        }
+
+    });
+
 </script>
+
 </body>
 </html>
