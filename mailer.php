@@ -1,3 +1,4 @@
+
 <?php
 
 use PHPMailer\PHPMailer\PHPMailer;
@@ -14,9 +15,11 @@ function sendResetEmail($recipientEmail, $recipientName, $resetLink)
         $mail->Host       = 'smtp.gmail.com';
         $mail->SMTPAuth   = true;
 
-        $mail->Username   = 'YOUR_GMAIL@gmail.com';
+        // Your Gmail account
+        $mail->Username   = 'saynesalthea8@gmail.com';
 
-        $mail->Password   = 'YOUR_GMAIL_APP_PASSWORD';
+        // Your Google App Password
+        $mail->Password   = 'dbephmhpuvqfbblx';
 
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = 587;
@@ -29,17 +32,14 @@ function sendResetEmail($recipientEmail, $recipientName, $resetLink)
 
         $mail->Body = "
             <h2>Password Reset Request</h2>
-            <p>Hello " . htmlspecialchars($recipientName) . ",</p>
+            <p>Hello " . htmlspecialchars($recipientName, ENT_QUOTES, 'UTF-8') . ",</p>
             <p>We received a request to reset your DocuBiz password.</p>
             <p>Click the button below to create a new password:</p>
-            <p>
-                <a href='" . htmlspecialchars($resetLink, ENT_QUOTES, 'UTF-8') . "'>
-                    Reset My Password
-                </a>
-            </p>
+            <a href='" . htmlspecialchars($resetLink, ENT_QUOTES, 'UTF-8') . "'>
+                Reset My Password
+            </a>
             <p>This link will expire in 30 minutes.</p>
             <p>If you did not request this, you can ignore this email.</p>
-            <p>Regards,<br>DocuBiz Team</p>
         ";
 
         $mail->AltBody = "Reset your DocuBiz password using this link: " . $resetLink;

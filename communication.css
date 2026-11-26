@@ -167,3 +167,18 @@
     outline: 2px solid #319795;
     outline-offset: 2px;
 }
+
+.comm .doc-table input[type="checkbox"] {
+    appearance: auto !important;
+    -webkit-appearance: checkbox !important;
+    width: auto !important;
+    height: auto !important;
+    border: initial !important;
+    border-radius: initial !important;
+    background: initial !important;
+    box-shadow: none !important;
+    display: inline-block;
+    padding: 0 !important;
+    cursor: pointer;
+    vertical-align: middle;
+}
