@@ -5,6 +5,20 @@ if (!isset($_SESSION["user_id"])) {
     exit;
 }
 require_once "db.php";
+date_default_timezone_set("Asia/Manila");
+$userRoleSession = strtolower(trim($_SESSION['user_role'] ?? $_SESSION['role'] ?? 'user'));
+$isAdmin = $userRoleSession === 'admin';
+$userId = (int) $_SESSION['user_id'];
+if ($userId < 1) { http_response_code(403); exit('Invalid session.'); }
+if (empty($_SESSION['calendar_csrf'])) $_SESSION['calendar_csrf'] = bin2hex(random_bytes(32));
+if (empty($_SESSION['project_csrf'])) $_SESSION['project_csrf'] = bin2hex(random_bytes(32));
+require __DIR__ . '/project_config.php';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!is_string($_POST['csrf'] ?? null) || !hash_equals($_SESSION['calendar_csrf'], $_POST['csrf'])) {
+        http_response_code(403);
+        exit('Forbidden: a valid security token is required.');
+    }
+}
 $success = "";
 $error = "";
 $month = isset($_GET["month"]) ? (int)$_GET["month"] : (int)date("n");
@@ -91,6 +105,17 @@ $formValues = [
 /* HANDLE FORM SUBMISSIONS */
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $action = $_POST["form_action"] ?? "";
+    // Ownership is checked on the server, never from a submitted owner ID.
+    if (in_array($action, ["update_event", "delete_event"], true) && !$isAdmin) {
+        $targetId = filter_var($_POST['event_id'] ?? null, FILTER_VALIDATE_INT);
+        if (!$targetId || $targetId < 1) { http_response_code(403); exit('Forbidden.'); }
+        $ownerCheck = $conn->prepare("SELECT id FROM events WHERE id = ? AND created_by = ?");
+        $ownerCheck->bind_param("ii", $targetId, $userId);
+        $ownerCheck->execute();
+        $allowed = $ownerCheck->get_result()->num_rows === 1;
+        $ownerCheck->close();
+        if (!$allowed) { http_response_code(403); exit('You can only edit or delete events you created.'); }
+    }
     /* DELETE EVENT */
     if ($action === "delete_event") {
         $eventId = filter_var(
@@ -101,10 +126,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $error = "Invalid event selected.";
         } else {
             $stmt = $conn->prepare(
-                "DELETE FROM events WHERE id = ?"
+                "DELETE FROM events WHERE id = ? AND (? = 1 OR created_by = ?)"
             );
             if ($stmt) {
-                $stmt->bind_param("i", $eventId);
+                $adminFlag = $isAdmin ? 1 : 0;
+                $stmt->bind_param("iii", $eventId, $adminFlag, $userId);
                 if ($stmt->execute()) {
                     $deleted = $stmt->affected_rows;
                     $stmt->close();
@@ -189,12 +215,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $stmt = $conn->prepare(
                     "INSERT INTO events
                     (event_name, event_date, start_time, end_time,
-                     event_type, location, description, assigned_staff, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                     event_type, location, description, assigned_staff, notes, created_by)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 );
                 if ($stmt) {
                     $stmt->bind_param(
-                        "sssssssss",
+                        "sssssssssi",
                         $eventName,
                         $eventDate,
                         $startTime,
@@ -203,7 +229,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         $location,
                         $description,
                         $assignedStaff,
-                        $notes
+                        $notes,
+                        $userId
                     );
                     if ($stmt->execute()) {
                         $stmt->close();
@@ -230,11 +257,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                          description = ?,
                          assigned_staff = ?,
                          notes = ?
-                     WHERE id = ?"
+                     WHERE id = ? AND (? = 1 OR created_by = ?)"
                 );
                 if ($stmt) {
+                    $adminFlag = $isAdmin ? 1 : 0;
                     $stmt->bind_param(
-                        "sssssssssi",
+                        "sssssssssiii",
                         $eventName,
                         $eventDate,
                         $startTime,
@@ -244,7 +272,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         $description,
                         $assignedStaff,
                         $notes,
-                        $eventId
+                        $eventId,
+                        $adminFlag,
+                        $userId
                     );
                     if ($stmt->execute()) {
                         $stmt->close();
@@ -263,63 +293,57 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         }
     }
 }
-/* GET EVENTS FOR THE SELECTED MONTH */
-$eventsByDate = [];
-$monthEvents = [];
-$stmt = $conn->prepare(
-    "SELECT id, event_name, event_date, start_time, end_time,
-            event_type, location, description, assigned_staff, notes
-     FROM events
-     WHERE event_date >= ?
-       AND event_date < DATE_ADD(?, INTERVAL 1 MONTH)
-     ORDER BY event_date ASC, start_time ASC"
-);
-if ($stmt) {
-    $stmt->bind_param("ss", $monthStart, $monthStart);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    while ($row = $result->fetch_assoc()) {
-        $monthEvents[] = $row;
-        $eventsByDate[$row["event_date"]][] = $row;
-    }
-    $stmt->close();
-}
-/* GET ALL EVENTS FOR VIEW ALL */
+/* Read both sources directly: projects are never copied into events. */
 $allEvents = [];
-$stmt = $conn->prepare(
-    "SELECT id, event_name, event_date, start_time, end_time,
-            event_type, location, description, assigned_staff, notes
-     FROM events
-     ORDER BY event_date ASC, start_time ASC"
-);
-if ($stmt) {
-    $stmt->execute();
-    $result = $stmt->get_result();
-    while ($row = $result->fetch_assoc()) {
-        $allEvents[] = $row;
-    }
-    $stmt->close();
+$result = $conn->query("SELECT id, event_name, event_date, start_time, end_time,
+    event_type, location, description, assigned_staff, notes, created_by FROM events");
+if (!$result) { http_response_code(500); exit('Unable to load calendar events.'); }
+while ($row = $result->fetch_assoc()) {
+    $row['source'] = 'event';
+    $row['can_edit'] = $isAdmin || ($row['created_by'] !== null && (int)$row['created_by'] === $userId);
+    unset($row['created_by']);
+    $allEvents[] = $row;
 }
-/* GET UPCOMING EVENTS */
+$result = $conn->query("SELECT id, project_name AS event_name,
+    COALESCE(due_date, start_date) AS event_date, event_time AS start_time,
+    location, event_type, status FROM projects");
+if (!$result) { http_response_code(500); exit('Unable to load calendar projects.'); }
+while ($row = $result->fetch_assoc()) {
+    $row['source'] = 'project';
+    $row['end_time'] = null;
+    $allEvents[] = $row;
+}
+usort($allEvents, function ($a, $b) {
+    return strcmp($a['event_date'] ?: '9999-12-31', $b['event_date'] ?: '9999-12-31')
+        ?: strcmp($a['start_time'] ?? '', $b['start_time'] ?? '')
+        ?: strcmp($a['source'], $b['source']) ?: ($a['id'] <=> $b['id']);
+});
+$eventsByDate = [];
 $upcomingEvents = [];
-$today = date("Y-m-d");
-$stmt = $conn->prepare(
-    "SELECT id, event_name, event_date, start_time, end_time,
-            event_type, location, description
-     FROM events
-     WHERE event_date >= ?
-     ORDER BY event_date ASC, start_time ASC
-     LIMIT 5"
-);
-if ($stmt) {
-    $stmt->bind_param("s", $today);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    while ($row = $result->fetch_assoc()) {
-        $upcomingEvents[] = $row;
+$today = date('Y-m-d');
+$monthPrefix = sprintf('%04d-%02d-', $year, $month);
+foreach ($allEvents as $entry) {
+    if ($entry['event_date'] && strpos($entry['event_date'], $monthPrefix) === 0) {
+        $eventsByDate[$entry['event_date']][] = $entry;
     }
-    $stmt->close();
+    if ($entry['event_date'] && $entry['event_date'] >= $today &&
+        !in_array($entry['status'] ?? '', ['Cancelled', 'Completed'], true)) {
+        $upcomingEvents[] = $entry;
+    }
 }
+$upcomingEvents = array_slice($upcomingEvents, 0, 5);
+function entryClass($entry) {
+    if ($entry['source'] === 'project') return 'badge-project' . (($entry['status'] ?? '') === 'Cancelled' ? ' badge-cancelled' : '');
+    return eventBadgeClass($entry['event_type']);
+}
+function entryAttributes($entry) {
+    if ($entry['source'] === 'project') return 'data-view="' . (int)$entry['id'] . '"';
+    return 'data-calendar-event="' . calendarEscape(json_encode($entry, JSON_INVALID_UTF8_SUBSTITUTE)) . '"';
+}
+function entryTitle($entry) {
+    return ($entry['source'] === 'project' ? 'Project: ' : '') . $entry['event_name'] . (($entry['status'] ?? '') === 'Cancelled' ? ' (Cancelled)' : '');
+}
+function entryTime($time) { return $time ? date('g:i A', strtotime($time)) : 'Time not set'; }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -330,6 +354,7 @@ if ($stmt) {
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="project_modal.css">
   <style>
     * {
       margin: 0;
@@ -631,6 +656,17 @@ if ($stmt) {
       line-height: 1.1;
       font-weight: 500;
     }
+    button.event-badge { border:0; text-align:left; cursor:pointer; width:100%; margin-bottom:3px; overflow-wrap:anywhere; }
+    .badge-project { background:#91d3d1; }
+    .badge-cancelled { background:#fce3e3; color:#991b1b; }
+    .calendar-entry-link { border:0; background:none; color:inherit; text-align:left; cursor:pointer; font:inherit; font-weight:600; overflow-wrap:anywhere; }
+    .calendar-entry-link:hover { text-decoration:underline; }
+    #calendarEventDetails { margin:auto; }
+    #calendarEventDetails dl { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    #calendarEventDetails dt { font-weight:600; font-size:.78rem; }
+    #calendarEventDetails dd { font-size:.85rem; white-space:pre-wrap; overflow-wrap:anywhere; }
+    #calendarEventDetails .detail-wide { grid-column:1/-1; }
+    .calendar-legend { flex-wrap:wrap; }
     .badge-catering {
       background-color: #d8b4fe;
     }
@@ -916,8 +952,6 @@ if ($stmt) {
         if ($displayName === "") {
             $displayName = "User";
         }
-        $userRoleSession = strtolower(trim($_SESSION["user_role"] ?? $_SESSION["role"] ?? "user"));
-$isAdmin = ($userRoleSession === "admin");
         $displayRole = ($userRoleSession === "admin") ? "Admin Staff" : "User";
         $avatarText = strtoupper(substr($displayName, 0, 2));
         ?>
@@ -982,7 +1016,7 @@ $isAdmin = ($userRoleSession === "admin");
       <div class="page-header">
         <div>
           <h1 class="page-title">Calendar</h1>
-          <p class="page-subtitle">Manage catering events, deliveries, and important schedules.</p>
+          <p class="page-subtitle">View events and projects. Projects without dates are available under View All.</p>
         </div>
         <button class="btn-add-event" id="openModalBtn" type="button">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -1020,13 +1054,7 @@ $isAdmin = ($userRoleSession === "admin");
                   echo '<span class="day-number">' . $day . '</span>';
                   if (!empty($eventsByDate[$dateKey])) {
                       foreach ($eventsByDate[$dateKey] as $calendarEvent) {
-                          echo '<div class="event-badge ' .
-                              eventBadgeClass($calendarEvent["event_type"]) .
-                              '" title="' .
-                              calendarEscape($calendarEvent["event_name"]) .
-                              '">' .
-                              calendarEscape($calendarEvent["event_name"]) .
-                              '</div>';
+                          echo '<button type="button" class="event-badge ' . entryClass($calendarEvent) . '" ' . entryAttributes($calendarEvent) . ' title="' . calendarEscape(entryTitle($calendarEvent)) . '">' . calendarEscape(entryTitle($calendarEvent)) . '</button>';
                       }
                   }
                   echo '</div>';
@@ -1040,6 +1068,8 @@ $isAdmin = ($userRoleSession === "admin");
             </div>
           </div>
           <div class="calendar-legend">
+            <div class="legend-item"><span class="legend-dot badge-project"></span><span>Project</span></div>
+            <div class="legend-item"><span class="legend-dot badge-cancelled"></span><span>Cancelled project</span></div>
             <div class="legend-item"><span class="legend-dot dot-catering"></span><span>Catering Event</span></div>
             <div class="legend-item"><span class="legend-dot dot-inventory"></span><span>Inventory Restock</span></div>
             <div class="legend-item"><span class="legend-dot dot-meeting"></span><span>Meeting</span></div>
@@ -1049,91 +1079,32 @@ $isAdmin = ($userRoleSession === "admin");
         <div class="right-events-section">
           <div class="card">
             <div class="card-header">
-              <h2><?php echo $showAll ? "All Events" : "Upcoming Events"; ?></h2>
+              <h2><?php echo $showAll ? "All Events & Projects" : "Upcoming Events & Projects"; ?></h2>
               <?php if ($showAll): ?>
-                <a href="calendar.php" class="view-all">Back</a>
+                <a href="calendar.php?month=<?= $month ?>&amp;year=<?= $year ?>" class="view-all">Back</a>
               <?php else: ?>
                 <a href="calendar.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>&view=all" class="view-all">View All</a>
               <?php endif; ?>
             </div>
             <div class="upcoming-events-list" id="upcoming-events">
-              <?php if ($showAll): ?>
-                <?php if (empty($allEvents)): ?>
-                  <p style="font-size:0.82rem;color:#718096;">No events have been added yet.</p>
-                <?php else: ?>
-                  <?php foreach ($allEvents as $event): ?>
-                    <div class="upcoming-event-item searchable-event">
-                      <div class="date-badge <?php echo eventBadgeClass($event["event_type"]); ?>">
-                        <span class="month"><?php echo strtoupper(date("M", strtotime($event["event_date"]))); ?></span>
-                        <span class="day"><?php echo date("d", strtotime($event["event_date"])); ?></span>
-                      </div>
-                      <div class="event-details">
-                        <h3><?php echo calendarEscape($event["event_name"]); ?></h3>
-                        <span class="meta">
-                          <?php echo calendarEscape(date("M d, Y", strtotime($event["event_date"]))); ?>
-                          · <?php echo calendarEscape(date("g:i A", strtotime($event["start_time"]))); ?>
-                          <?php if (!empty($event["end_time"])): ?>
-                            - <?php echo calendarEscape(date("g:i A", strtotime($event["end_time"]))); ?>
-                          <?php endif; ?>
-                        </span>
-                        <span class="location">
-                          <?php echo calendarEscape($event["location"] ?: eventTypeLabel($event["event_type"])); ?>
-                        </span>
-                        <?php if (!empty($event["assigned_staff"])): ?>
-                          <span class="location">Staff: <?php echo calendarEscape($event["assigned_staff"]); ?></span>
-                        <?php endif; ?>
-                        <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;">
-                          <button
-                            type="button"
-                            class="edit-event-btn"
-                            style="padding:5px 12px;border:none;border-radius:6px;background:#72dbd9;color:#1a365d;font-size:0.75rem;font-weight:600;cursor:pointer;"
-                            data-id="<?php echo (int)$event["id"]; ?>"
-                            data-name="<?php echo calendarEscape($event["event_name"]); ?>"
-                            data-date="<?php echo calendarEscape($event["event_date"]); ?>"
-                            data-start="<?php echo calendarEscape(substr($event["start_time"], 0, 5)); ?>"
-                            data-end="<?php echo calendarEscape(substr((string)$event["end_time"], 0, 5)); ?>"
-                            data-type="<?php echo calendarEscape($event["event_type"]); ?>"
-                            data-location="<?php echo calendarEscape($event["location"]); ?>"
-                            data-description="<?php echo calendarEscape($event["description"]); ?>"
-                            data-staff="<?php echo calendarEscape($event["assigned_staff"]); ?>"
-                            data-notes="<?php echo calendarEscape($event["notes"]); ?>"
-                          >Edit</button>
-                          <form method="POST" action="calendar.php?month=<?php echo $month; ?>&year=<?php echo $year; ?>&view=all" onsubmit="return confirm('Are you sure you want to delete this event? This action cannot be undone.');" style="margin:0;">
-                            <input type="hidden" name="form_action" value="delete_event">
-                            <input type="hidden" name="event_id" value="<?php echo (int)$event["id"]; ?>">
-                            <button type="submit" style="padding:5px 12px;border:none;border-radius:6px;background:#fca5a5;color:#7f1d1d;font-size:0.75rem;font-weight:600;cursor:pointer;">Delete</button>
-                          </form>
-                        </div>
-                      </div>
-                    </div>
-                  <?php endforeach; ?>
-                <?php endif; ?>
-              <?php else: ?>
-                <?php if (empty($upcomingEvents)): ?>
-                  <p style="font-size:0.82rem;color:#718096;">No upcoming events yet.</p>
-                <?php else: ?>
-                  <?php foreach ($upcomingEvents as $upcoming): ?>
-                    <div class="upcoming-event-item searchable-event">
-                      <div class="date-badge <?php echo eventBadgeClass($upcoming["event_type"]); ?>">
-                        <span class="month"><?php echo strtoupper(date("M", strtotime($upcoming["event_date"]))); ?></span>
-                        <span class="day"><?php echo date("d", strtotime($upcoming["event_date"])); ?></span>
-                      </div>
-                      <div class="event-details">
-                        <h3><?php echo calendarEscape($upcoming["event_name"]); ?></h3>
-                        <span class="meta">
-                          <?php echo calendarEscape(date("g:i A", strtotime($upcoming["start_time"]))); ?>
-                          <?php if (!empty($upcoming["end_time"])): ?>
-                            - <?php echo calendarEscape(date("g:i A", strtotime($upcoming["end_time"]))); ?>
-                          <?php endif; ?>
-                        </span>
-                        <span class="location">
-                          <?php echo calendarEscape($upcoming["location"] ?: eventTypeLabel($upcoming["event_type"])); ?>
-                        </span>
-                      </div>
-                    </div>
-                  <?php endforeach; ?>
-                <?php endif; ?>
+              <?php $visibleEntries = $showAll ? $allEvents : $upcomingEvents; ?>
+              <?php if (!$visibleEntries): ?>
+                <p style="font-size:.82rem;color:#718096;">No scheduled entries.</p>
               <?php endif; ?>
+              <?php foreach ($visibleEntries as $entry): ?>
+                <div class="upcoming-event-item searchable-event">
+                  <div class="date-badge <?= entryClass($entry) ?>">
+                    <span class="month"><?= $entry['event_date'] ? strtoupper(date('M', strtotime($entry['event_date']))) : 'TBD' ?></span>
+                    <span class="day"><?= $entry['event_date'] ? date('d', strtotime($entry['event_date'])) : '—' ?></span>
+                  </div>
+                  <div class="event-details">
+                    <h3><button type="button" class="calendar-entry-link" <?= entryAttributes($entry) ?>><?= calendarEscape(entryTitle($entry)) ?></button></h3>
+                    <span class="meta"><?= calendarEscape($entry['event_date'] ? date('M d, Y', strtotime($entry['event_date'])) : 'Date not set') ?> · <?= calendarEscape(entryTime($entry['start_time'])) ?><?php if ($entry['end_time']): ?> – <?= calendarEscape(entryTime($entry['end_time'])) ?><?php endif; ?></span>
+                    <span class="location"><?= calendarEscape($entry['location'] ?: ($entry['source'] === 'project' ? $entry['event_type'] : eventTypeLabel($entry['event_type']))) ?></span>
+                    <?php if ($entry['source'] === 'project'): ?><span class="meta"><?= calendarEscape($entry['status']) ?></span><?php endif; ?>
+                  </div>
+                </div>
+              <?php endforeach; ?>
             </div>
           </div>
         </div>
@@ -1156,6 +1127,7 @@ $isAdmin = ($userRoleSession === "admin");
         </p>
       <?php endif; ?>
       <form action="calendar.php?month=<?php echo $month; ?>&year=<?php echo $year; ?><?php echo $showAll ? '&view=all' : ''; ?>" method="POST" id="eventForm">
+        <input type="hidden" name="csrf" value="<?= calendarEscape($_SESSION['calendar_csrf']) ?>">
         <input type="hidden" name="form_action" id="formAction" value="<?php echo calendarEscape($formAction); ?>">
         <input type="hidden" name="event_id" id="event_id" value="<?php echo calendarEscape($editingEventId); ?>">
         <div class="modal-form-grid">
@@ -1209,6 +1181,22 @@ $isAdmin = ($userRoleSession === "admin");
     </div>
   </div>
 </div>
+<style>#calendarEditEvent[hidden], #calendarDeleteEvent[hidden] { display: none !important; }</style>
+<dialog id="calendarEventDetails" class="db-modal" aria-labelledby="calendarDetailTitle">
+  <div class="db-header"><h2 id="calendarDetailTitle">Event Details</h2><button type="button" id="calendarCloseDetails" aria-label="Close">×</button></div>
+  <dl id="calendarDetailFields"></dl>
+  <div class="db-actions">
+    <button type="button" class="db-outline" id="calendarCloseDetailsBottom">Close</button>
+    <button type="button" class="db-next" id="calendarEditEvent" hidden>Edit Event</button>
+      <form method="POST" id="calendarDeleteEvent" hidden>
+        <input type="hidden" name="csrf" value="<?= calendarEscape($_SESSION['calendar_csrf']) ?>">
+        <input type="hidden" name="form_action" value="delete_event">
+        <input type="hidden" name="event_id" id="calendarDeleteId">
+        <button type="submit" class="db-outline">Delete Event</button>
+      </form>
+  </div>
+</dialog>
+<?php require __DIR__ . '/project_modal.php'; ?>
 <script>
   const openModalBtn = document.getElementById('openModalBtn');
   const closeModalBtn = document.getElementById('closeModalBtn');
@@ -1239,7 +1227,9 @@ $isAdmin = ($userRoleSession === "admin");
     saveModalBtn.textContent = 'Save Event';
     modalOverlay.classList.add('active');
   }
-  function openEditModal(button) {
+  function openEditModal(record) {
+    if (!eventForm || record.can_edit !== true) return;
+    const button = {dataset: {id: record.id, name: record.event_name, date: record.event_date, start: (record.start_time || '').slice(0,5), end: (record.end_time || '').slice(0,5), type: record.event_type, location: record.location, description: record.description, staff: record.assigned_staff, notes: record.notes}};
     formAction.value = 'update_event';
     eventId.value = button.dataset.id;
     fields.name.value = button.dataset.name || '';
@@ -1255,25 +1245,44 @@ $isAdmin = ($userRoleSession === "admin");
     saveModalBtn.textContent = 'Update Event';
     modalOverlay.classList.add('active');
   }
-  openModalBtn.addEventListener('click', openAddModal);
-  document.querySelectorAll('.edit-event-btn').forEach(function(button) {
-    button.addEventListener('click', function() {
-      openEditModal(button);
-    });
-  });
-  closeModalBtn.addEventListener('click', function() {
-    modalOverlay.classList.remove('active');
-  });
-  modalOverlay.addEventListener('click', function(e) {
-    if (e.target === modalOverlay) {
-      modalOverlay.classList.remove('active');
+  openModalBtn?.addEventListener('click', openAddModal);
+  closeModalBtn?.addEventListener('click', () => modalOverlay.classList.remove('active'));
+  modalOverlay?.addEventListener('click', e => { if (e.target === modalOverlay) modalOverlay.classList.remove('active'); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') modalOverlay?.classList.remove('active'); });
+  const eventDetailsDialog = document.getElementById('calendarEventDetails');
+  let currentEvent = null;
+  function displayTime(value) {
+    if (!value) return 'Not set';
+    const [h,m] = value.split(':').map(Number);
+    return `${h % 12 || 12}:${String(m).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`;
+  }
+  document.addEventListener('click', e => {
+    const button = e.target.closest('[data-calendar-event]');
+    if (!button) return;
+    currentEvent = JSON.parse(button.dataset.calendarEvent);
+    const types = {catering:'Catering Event', inventory:'Inventory Restock', meeting:'Meeting', other:'Other'};
+    const list = document.getElementById('calendarDetailFields');
+    list.replaceChildren();
+    for (const [label,value,wide] of [
+      ['Event Name', currentEvent.event_name,true], ['Date',currentEvent.event_date],
+      ['Event Type',types[currentEvent.event_type] || currentEvent.event_type],
+      ['Start Time',displayTime(currentEvent.start_time)], ['End Time',displayTime(currentEvent.end_time)],
+      ['Location',currentEvent.location,true], ['Assigned Staff',currentEvent.assigned_staff,true],
+      ['Event Description',currentEvent.description,true], ['Notes',currentEvent.notes,true]
+    ]) {
+      const group=document.createElement('div'); if(wide) group.className='detail-wide';
+      const dt=document.createElement('dt'),dd=document.createElement('dd');
+      dt.textContent=label; dd.textContent=value || 'Not set'; group.append(dt,dd); list.append(group);
     }
+    const deleteId=document.getElementById('calendarDeleteId'); if(deleteId) deleteId.value=currentEvent.id;
+    document.getElementById("calendarEditEvent").hidden = currentEvent.can_edit !== true;
+    document.getElementById("calendarDeleteEvent").hidden = currentEvent.can_edit !== true;
+    eventDetailsDialog.showModal();
   });
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-      modalOverlay.classList.remove('active');
-    }
-  });
+  document.getElementById('calendarCloseDetails').onclick = () => eventDetailsDialog.close();
+  document.getElementById('calendarCloseDetailsBottom').onclick = () => eventDetailsDialog.close();
+  document.getElementById('calendarEditEvent')?.addEventListener('click', () => { if(currentEvent?.can_edit === true){ eventDetailsDialog.close(); openEditModal(currentEvent); } });
+  document.getElementById('calendarDeleteEvent')?.addEventListener('submit', e => { if(currentEvent?.can_edit !== true || !confirm('Delete this event? This cannot be undone.')) e.preventDefault(); });
   function searchEvents() {
     const searchValue = eventSearch.value.trim().toLowerCase();
     document.querySelectorAll('.event-badge').forEach(function(badge) {
