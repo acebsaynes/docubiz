@@ -1129,6 +1129,9 @@ if (count($nameParts) >= 2) {
     ].join("-");
     taskDeadlineInput.min = localToday;
   </script>
+
+
+
 <?php
 if(empty($_SESSION['calendar_csrf'])) $_SESSION['calendar_csrf']=bin2hex(random_bytes(32));
 function calendarEscape($value){return htmlspecialchars((string)$value,ENT_QUOTES,'UTF-8');}
