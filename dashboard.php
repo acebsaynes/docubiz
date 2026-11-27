@@ -1,4 +1,3 @@
-
 <?php
 session_start();
 date_default_timezone_set("Asia/Manila");
@@ -275,6 +274,70 @@ if ($calendarStmt) {
     $calendarStmt->close();
 } else {
     $scheduleError = true;
+}
+
+
+/* Admin-only reporting: no financial queries for regular users. */
+if ($isAdmin) {
+    $reportMonths = [];
+    $reportStart = new DateTimeImmutable('first day of this month');
+    $reportStart = $reportStart->modify('-5 months');
+    $reportEnd = new DateTimeImmutable('first day of next month');
+    for ($i = 0; $i < 6; $i++) {
+        $month = $reportStart->modify("+$i months");
+        $reportMonths[$month->format('Y-m')] = [
+            'label' => $month->format('M y'), 'sales' => 0, 'purchase' => 0, 'expense' => 0
+        ];
+    }
+    $financeError = false;
+    try {
+        $reportFrom = $reportStart->format('Y-m-d');
+        $reportTo = $reportEnd->format('Y-m-d');
+        $reportStmt = $conn->prepare("SELECT DATE_FORMAT(l.ledger_date, '%Y-%m') AS period,
+            l.ledger_type, COALESCE(SUM(i.quantity * i.unit_price), 0) AS total
+            FROM finance_ledgers l JOIN finance_ledger_items i ON i.ledger_id = l.id
+            WHERE l.ledger_date >= ? AND l.ledger_date < ? AND l.ledger_date <= CURDATE()
+            GROUP BY period, l.ledger_type");
+        if (!$reportStmt) throw new RuntimeException('Finance prepare failed');
+        $reportStmt->bind_param('ss', $reportFrom, $reportTo);
+        if (!$reportStmt->execute()) throw new RuntimeException('Finance execute failed');
+        $reportResult = $reportStmt->get_result();
+        if (!$reportResult) throw new RuntimeException('Finance result failed');
+        while ($row = $reportResult->fetch_assoc()) {
+            if (isset($reportMonths[$row['period']][$row['ledger_type']])) {
+                $reportMonths[$row['period']][$row['ledger_type']] = (float) $row['total'];
+            }
+        }
+        $reportStmt->close();
+    } catch (Throwable $e) {
+        $financeError = true;
+        error_log('Dashboard finance report: ' . $e->getMessage());
+    }
+    $reportTotals = ['sales' => 0, 'purchase' => 0, 'expense' => 0];
+    $reportMax = 1;
+    foreach ($reportMonths as $month) {
+        foreach ($reportTotals as $type => $amount) {
+            $reportTotals[$type] += $month[$type];
+            $reportMax = max($reportMax, abs($month[$type]));
+        }
+    }
+    $reportNet = $reportTotals['sales'] - $reportTotals['purchase'] - $reportTotals['expense'];
+    $projectCounts = ['Completed' => 0, 'In Progress' => 0, 'Planned' => 0, 'On Hold' => 0, 'Cancelled' => 0, 'Other' => 0];
+    $projectError = false;
+    try {
+        $projectResult = $conn->query('SELECT status, COUNT(*) AS total FROM projects GROUP BY status');
+        if (!$projectResult) throw new RuntimeException('Project report failed');
+        while ($row = $projectResult->fetch_assoc()) {
+            $key = array_key_exists($row['status'], $projectCounts) ? $row['status'] : 'Other';
+            $projectCounts[$key] += (int) $row['total'];
+        }
+    } catch (Throwable $e) {
+        $projectError = true;
+        error_log('Dashboard project report: ' . $e->getMessage());
+    }
+    $projectTotal = array_sum($projectCounts);
+    $projectEligible = $projectTotal - $projectCounts['Cancelled'];
+    $projectCompletion = $projectEligible > 0 ? round(100 * $projectCounts['Completed'] / $projectEligible) : 0;
 }
 
 /* Get logged-in user's display name. */
@@ -1016,6 +1079,30 @@ if (count($nameParts) >= 2) {
     color: #ffffff !important;
     text-decoration: none !important;
 }
+
+
+        /* Admin report cards only */
+        .admin-report-grid { display:grid; grid-template-columns:minmax(0, 2fr) minmax(0, 1fr); gap:25px; margin-bottom:25px; }
+        .admin-report-grid .card { min-width:0; }
+        .report-caption { font-size:.72rem; color:#718096; margin-bottom:14px; }
+        .report-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:20px; }
+        .report-metric { border:1px solid #edf2f7; border-radius:8px; padding:10px; min-width:0; }
+        .report-metric span { display:block; color:#718096; font-size:.68rem; }
+        .report-metric strong { display:block; color:#122b49; font-size:.94rem; overflow-wrap:anywhere; margin-top:5px; }
+        .report-chart { display:block; width:100%; height:auto; overflow:visible; }
+        .report-legend { display:flex; flex-wrap:wrap; gap:8px 16px; font-size:.7rem; color:#718096; margin-top:12px; }
+        .report-legend i { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; }
+        .report-completion { display:flex; align-items:center; gap:15px; margin:4px 0 18px; }
+        .report-ring { width:92px; height:92px; flex-shrink:0; border-radius:50%; display:grid; place-items:center; }
+        .report-ring-inner { background:white; width:72px; height:72px; border-radius:50%; display:grid; place-items:center; font-size:1.15rem; font-weight:600; color:#122b49; }
+        .report-status { margin:9px 0; }
+        .report-status-label { display:flex; justify-content:space-between; gap:8px; font-size:.73rem; color:#4a5568; margin-bottom:4px; }
+        .report-track { height:6px; background:#edf2f7; border-radius:6px; overflow:hidden; }
+        .report-track span { display:block; height:100%; border-radius:6px; }
+        @media(max-width:1150px) { .admin-report-grid { grid-template-columns:1fr; } }
+        @media(max-width:600px) { .report-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
+<?php require_once "appearance-theme.php"; ?>
     </style>
 </head>
 
@@ -1177,6 +1264,55 @@ if (count($nameParts) >= 2) {
         <main class="content-area">
 
             <h1 class="page-title">Dashboard</h1>
+
+
+            <?php if ($isAdmin): ?>
+            <section class="admin-report-grid" aria-label="Admin reports">
+                <div class="card">
+                    <div class="card-header"><h2>Financial Overview</h2><a class="view-all" href="finances.php">View Finances</a></div>
+                    <p class="report-caption">Last 6 calendar months · <?= $reportStart->format('M Y') ?> – <?= date('M Y') ?></p>
+                    <?php if ($financeError): ?>
+                        <p class="event-desc">Financial report unavailable. Please check the finance database.</p>
+                    <?php else: ?>
+                    <div class="report-metrics">
+                        <?php foreach (['Total Sales'=>$reportTotals['sales'], 'Purchases'=>$reportTotals['purchase'], 'Expenses'=>$reportTotals['expense'], 'Net Amount'=>$reportNet] as $label=>$amount): ?>
+                            <div class="report-metric"><span><?= $label ?></span><strong>₱<?= number_format($amount, 2) ?></strong></div>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php $reportColors = ['sales'=>'#274b73','purchase'=>'#319795','expense'=>'#dd9b64']; ?>
+                    <svg class="report-chart" viewBox="0 0 620 230" role="img" aria-label="Monthly sales, purchases and expenses in pesos; hover over bars for amounts">
+                        <?php for ($tick=0; $tick<=4; $tick++): $y=18+$tick*43; $value=$reportMax*(1-$tick/2); ?>
+                            <line x1="100" y1="<?= $y ?>" x2="610" y2="<?= $y ?>" stroke="<?= $tick===2?'#a0aec0':'#edf2f7' ?>" />
+                            <text x="92" y="<?= $y+4 ?>" text-anchor="end" font-size="10" fill="#718096">₱<?= number_format($value, 2) ?></text>
+                        <?php endfor; ?>
+                        <?php $idx=0; foreach ($reportMonths as $month): $x=110+$idx*84; $j=0; ?>
+                            <?php foreach ($reportColors as $type=>$color): $h=abs($month[$type])/$reportMax*86; $y=$month[$type]>=0?104-$h:104; ?>
+                                <rect x="<?= $x+$j*21 ?>" y="<?= $y ?>" width="17" height="<?= $h ?>" rx="2" fill="<?= $color ?>"><title><?= $month['label'] ?> · <?= ucfirst($type) ?>: ₱<?= number_format($month[$type],2) ?></title></rect>
+                            <?php $j++; endforeach; ?>
+                            <text x="<?= $x+29 ?>" y="211" text-anchor="middle" font-size="11" fill="#718096"><?= $month['label'] ?></text>
+                        <?php $idx++; endforeach; ?>
+                    </svg>
+                    <div class="report-legend"><span><i style="background:#274b73"></i>Sales</span><span><i style="background:#319795"></i>Purchases</span><span><i style="background:#dd9b64"></i>Expenses</span></div>
+                    <p class="report-caption" style="margin:12px 0 0">Based on recorded ledger items. Net amount = sales − purchases − expenses; not verified cash flow or accounting profit.</p>
+                    <?php endif; ?>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h2>Project Progress</h2><a class="view-all" href="projects.php">View Projects</a></div>
+                    <p class="report-caption">All recorded projects</p>
+                    <?php if ($projectError): ?>
+                        <p class="event-desc">Project report unavailable.</p>
+                    <?php else: ?>
+                    <div class="report-completion">
+                        <div class="report-ring" style="background:conic-gradient(#319795 <?= $projectCompletion ?>%, #edf2f7 0)"><div class="report-ring-inner"><?= $projectEligible ? $projectCompletion.'%' : '—' ?></div></div>
+                        <div><h3 class="event-title"><?= $projectTotal ?> Total Projects</h3><p class="event-desc"><?= $projectCounts['Completed'] ?> completed · excludes cancelled from completion rate</p></div>
+                    </div>
+                    <?php $statusColors=['Completed'=>'#319795','In Progress'=>'#274b73','Planned'=>'#81b3e0','On Hold'=>'#dd9b64','Cancelled'=>'#d18b8b','Other'=>'#a0aec0']; foreach ($projectCounts as $status=>$count): if ($status==='Other' && !$count) continue; ?>
+                        <div class="report-status"><div class="report-status-label"><span><?= $status ?></span><strong><?= $count ?></strong></div><div class="report-track"><span style="width:<?= $projectTotal ? 100*$count/$projectTotal : 0 ?>%;background:<?= $statusColors[$status] ?>"></span></div></div>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+            </section>
+            <?php endif; ?>
 
             <div class="dashboard-grid">
 
