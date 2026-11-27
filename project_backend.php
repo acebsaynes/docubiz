@@ -58,7 +58,7 @@ if (isset($_GET['project_detail'])) {
     try {
         $row=dbProjectGet((int)$_GET['project_detail']);
         if (!$row) dbProjectReply(['error'=>'Project not found.'],404);
-        foreach (['food_selections','drink_selections','service_inclusions'] as $key) $row[$key]=json_decode($row[$key]??'[]',true)?:[];
+        foreach (['food_selections','drink_selections','service_inclusions','rental_items'] as $key) $row[$key]=json_decode($row[$key]??'[]',true)?:[];
         dbProjectReply(['project'=>$row]);
     } catch(Throwable $e) { error_log($e->getMessage()); dbProjectReply(['error'=>'Unable to load project.'],500); }
 }
@@ -117,6 +117,24 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
                 $v['terms_accepted']=1;
                 $v['terms_accepted_at']=(new DateTime('now',new DateTimeZone('Asia/Manila')))->format('Y-m-d H:i:s');
             }
+            if ($type==='Rental Quotation') {
+                $v['event_type']='Other';
+                $v['rental_type']=dbProjectText($data,'rental_type',10);
+                if (!in_array($v['rental_type'],['Pickup','Delivery'],true)) throw new InvalidArgumentException('Select pickup or delivery.');
+                $fee=$v['rental_type']==='Delivery'?dbProjectText($data,'rental_delivery_fee',20):'0';
+                if (($data['terms_accepted']??false)!==true) throw new InvalidArgumentException('Accept the rental terms and conditions.');
+                $v['terms_accepted']=1;
+                $v['terms_accepted_at']=(new DateTime('now',new DateTimeZone('Asia/Manila')))->format('Y-m-d H:i:s');
+                $v['rental_pullout_time']=dbProjectTime(dbProjectText($data,'rental_pullout_time',5));
+                if (!$v['start_date'] || !$v['due_date'] || !$v['event_time'] || !$v['rental_pullout_time'] || ($v['rental_type']==='Delivery' && !$v['location'])) throw new InvalidArgumentException('Complete all rental details.');
+                if ($v['due_date'].' '.$v['rental_pullout_time'] <= $v['start_date'].' '.$v['event_time']) throw new InvalidArgumentException('Pull-out must be after delivery.');
+                if (!is_array($data['rental_items']??null)) throw new InvalidArgumentException('Invalid rental items.');
+                $calc=rentalCalculation($data['rental_items'],$v['start_date'].' '.$v['event_time'],$v['due_date'].' '.$v['rental_pullout_time'],$fee);
+                $v['rental_delivery_fee']=$calc['delivery_fee'];
+                $v['rental_items']=json_encode($calc['items'],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);
+                $v['rental_days']=$calc['days']; $v['rental_subtotal']=$calc['subtotal']; $v['quotation_total']=$calc['total'];
+                $v['quote_date']=$old['quote_date']??$projectConfig['today'];
+            }
             $conn->begin_transaction(); $transaction=true;
             if ($old) {
                 $set=implode(',',array_map(fn($k)=>"`$k`=?",array_keys($v)));
@@ -128,7 +146,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
                 dbProjectQuery("INSERT INTO projects ($cols) VALUES ($marks)",array_values($v));
                 $id=$conn->insert_id;
             }
-            if ($catering && empty($old['quotation_number'])) dbProjectQuery('UPDATE projects SET quotation_number=? WHERE id=?',[sprintf('LVQ-%s-%03d',substr($v['quote_date'],0,4),$id),$id]);
+            if (($catering || $type==='Rental Quotation') && empty($old['quotation_number'])) dbProjectQuery('UPDATE projects SET quotation_number=? WHERE id=?',[sprintf('LVQ-%s-%03d',substr($v['quote_date'],0,4),$id),$id]);
             $conn->commit(); $transaction=false;
         } else throw new InvalidArgumentException('Invalid action.');
         if ($json) dbProjectReply(['success'=>true,'id'=>$id]);

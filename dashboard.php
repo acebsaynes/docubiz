@@ -127,7 +127,7 @@ $scheduleSql = "SELECT id, 'event' AS source, event_name, event_date,
                 FROM events
                 UNION ALL
                 SELECT id, 'project' AS source, project_name AS event_name,
-                       COALESCE(due_date, start_date) AS event_date,
+                       CASE WHEN project_type='Rental Quotation' THEN COALESCE(start_date,due_date) ELSE COALESCE(due_date,start_date) END AS event_date,
                        event_time AS start_time, event_type, location, description, status
                 FROM projects";
 $calendarToday = new DateTimeImmutable("today");

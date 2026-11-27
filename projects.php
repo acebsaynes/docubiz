@@ -76,16 +76,18 @@ $projects = [];
 
 $stmt = $conn->prepare(
     "SELECT id, user_id, project_name, client_name, description, start_date,
-            due_date, status, event_type, location, progress,
+            due_date, status, project_type, event_type, location, progress,
             guest_count, event_time
      FROM projects
-     ORDER BY COALESCE(due_date, start_date) DESC, id DESC"
+     ORDER BY CASE WHEN project_type='Rental Quotation' THEN COALESCE(start_date,due_date) ELSE COALESCE(due_date,start_date) END DESC, id DESC"
 );
 
 if ($stmt) {
     $stmt->execute();
     $result = $stmt->get_result();
     while ($row = $result->fetch_assoc()) {
+        if ($row['project_type']==='Rental Quotation') $row['event_type']='Rental Quotation';
+        $row['schedule_date']=$row['project_type']==='Rental Quotation'?($row['start_date']?:$row['due_date']):($row['due_date']?:$row['start_date']);
         $projects[] = $row;
     }
     $stmt->close();
@@ -631,6 +633,7 @@ body{background-color:#d8dcdb;color:#333;min-height:100vh}
                                         <option value="Meeting">Meeting</option>
 
                                         <option value="Other">Other</option>
+                                        <option value="Rental Quotation">Rental Quotation</option>
 
                                    </select>
 
@@ -707,7 +710,7 @@ body{background-color:#d8dcdb;color:#333;min-height:100vh}
 
                                              data-status="<?php echo projectsEscape($project["status"]); ?>"
 
-                                             data-date="<?php echo projectsEscape($project["due_date"] ?? $project["start_date"] ?? ""); ?>">
+                                             data-date="<?php echo projectsEscape($project["schedule_date"] ?? ""); ?>">
 
                                         <td><div class="project-name-cell"><button type="button" class="project-title db-view-link" data-view="<?= (int)$project['id'] ?>"><?php echo projectsEscape($project["project_name"]); ?></button><span class="project-location"><?php echo projectsEscape($project["location"] ?: "Location not set"); ?></span></div></td>
 
@@ -715,7 +718,7 @@ body{background-color:#d8dcdb;color:#333;min-height:100vh}
 
                                         <td><span class="event-type-badge"><?php echo projectsEscape($project["event_type"]); ?></span></td>
 
-                                        <td><?php echo projectsEscape(projectDate($project["due_date"] ?: $project["start_date"])); ?></td>
+                                        <td><?php echo projectsEscape(projectDate($project["schedule_date"])); ?></td>
 
                                         <td><span class="<?php echo projectsEscape(projectStatusClass($project["status"])); ?>"><?php echo projectsEscape($project["status"]); ?></span></td>
 
@@ -772,9 +775,9 @@ body{background-color:#d8dcdb;color:#333;min-height:100vh}
 
                                    if (!in_array($project["status"], ["Planned", "In Progress"], true)) continue;
 
-                                   if ($project["due_date"] && $project["due_date"] < date("Y-m-d")) continue;
+                                   if ($project["schedule_date"] && $project["schedule_date"] < date("Y-m-d")) continue;
 
-                                   $dateForBadge = $project["due_date"] ?: $project["start_date"];
+                                   $dateForBadge = $project["schedule_date"];
 
                                    $badgeClasses = ["badge-purple", "badge-red", "badge-green"];
 

@@ -27,7 +27,7 @@ function ntItems($uid){
   if($r['updated_at']||(int)$r['created_by']!==$uid){$add(ntKey('event',$r['id'],$r['updated_at']??$r['created_at']),'event',$r['updated_at']?'Calendar update':($r['creator']?:'Calendar'),($r['updated_at']?'Updated event: ':'Scheduled event: ').$r['event_name'].' — '.ntDate($r['event_date']),ntCalendar($r['event_date']),$r['age_seconds']);}
   if($r['event_date']>=$day&&$r['event_date']<=$end){$days=(int)$today->diff(new DateTimeImmutable($r['event_date']))->days;$stage=$days===0?'today':($days===1?'tomorrow':'within7');$add(ntKey('event-reminder',$r['id'],$r['event_date'],$stage),'reminder','Calendar reminder',$r['event_name'].' — '.($days===0?'Today':($days===1?'Tomorrow':ntDate($r['event_date']))),ntCalendar($r['event_date']));}
  }
- foreach(ntRows("SELECT id,project_name,status,progress,user_id,created_at,updated_at,COALESCE(due_date,start_date) AS schedule_date,TIMESTAMPDIFF(SECOND,updated_at,CURRENT_TIMESTAMP) AS age_seconds FROM projects") as $r){
+ foreach(ntRows("SELECT id,project_name,status,progress,user_id,created_at,updated_at,CASE WHEN project_type='Rental Quotation' THEN COALESCE(start_date,due_date) ELSE COALESCE(due_date,start_date) END AS schedule_date,TIMESTAMPDIFF(SECOND,updated_at,CURRENT_TIMESTAMP) AS age_seconds FROM projects") as $r){
   $changed=$r['updated_at']!==$r['created_at'];
   // Creator is not necessarily the most recent editor; never misattribute an edit.
   $add(ntKey('project',$r['id'],$r['updated_at'],$r['status'],$r['progress']),'project','Projects',($changed?'Project updated: ':'Project: ').$r['project_name'].' — '.$r['status'].' ('.$r['progress'].'%)','projects.php',$r['age_seconds']);

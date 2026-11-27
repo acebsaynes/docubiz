@@ -16,3 +16,6 @@ foreach (['Wedding','Debut','Kiddie Birthday','Adult Birthday'] as $event) {
 $projectConfig = compact('projectTypes','eventTypes','statuses','foods','drinks','inclusions','packages','isAdmin');
 $projectConfig['csrf'] = $_SESSION['project_csrf'];
 $projectConfig['today'] = (new DateTime('now',new DateTimeZone('Asia/Manila')))->format('Y-m-d');
+
+require_once __DIR__ . "/rental_catalog.php";
+$projectConfig["rentalCatalog"] = rentalCatalog();

@@ -306,7 +306,7 @@ while ($row = $result->fetch_assoc()) {
     $allEvents[] = $row;
 }
 $result = $conn->query("SELECT id, project_name AS event_name,
-    COALESCE(due_date, start_date) AS event_date, event_time AS start_time,
+    CASE WHEN project_type='Rental Quotation' THEN COALESCE(start_date,due_date) ELSE COALESCE(due_date,start_date) END AS event_date, event_time AS start_time,
     location, event_type, status FROM projects");
 if (!$result) { http_response_code(500); exit('Unable to load calendar projects.'); }
 while ($row = $result->fetch_assoc()) {
