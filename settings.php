@@ -1,30 +1,104 @@
-
 <?php
 session_start();
-if (!isset($_SESSION["user_id"])) {
-    header("Location: login.php");
-    exit;
+if (empty($_SESSION['user_id'])) { header('Location: login.php'); exit; }
+require_once __DIR__.'/db.php';
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+$userId = (int)$_SESSION['user_id'];
+function settingsEscape($value) { return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
+function accountInput($key) { return is_string($_POST[$key] ?? null) ? trim($_POST[$key]) : ''; }
+function accountPassword($key) { return is_string($_POST[$key] ?? null) ? $_POST[$key] : ''; }
+function accountLength($value) { return function_exists('mb_strlen') ? mb_strlen($value, 'UTF-8') : preg_match_all('/./us', $value); }
+function accountQuery($conn, $sql, $types, ...$args) {
+    $stmt = $conn->prepare($sql); $stmt->bind_param($types, ...$args); $stmt->execute(); return $stmt;
 }
-$displayName = trim(
-    $_SESSION["user_name"]
-    ?? $_SESSION["full_name"]
-    ?? $_SESSION["user_email"]
-    ?? $_SESSION["email"]
-    ?? "Jana Lei Lumbreras"
-);
-if ($displayName === "") {
-    $displayName = "Jana Lei Lumbreras";
+$stmt = accountQuery($conn, 'SELECT id, full_name, email, phone, country, city, postal_code, password, role FROM users WHERE id=?', 'i', $userId);
+$account = $stmt->get_result()->fetch_assoc(); $stmt->close();
+if (!$account) { $_SESSION = []; session_destroy(); header('Location: login.php'); exit; }
+// The photo migration is optional; all other account controls work without it.
+$photoEnabled = $conn->query("SHOW COLUMNS FROM users LIKE 'profile_photo'")->num_rows > 0;
+$hasPhoto = false;
+if ($photoEnabled) {
+    $stmt = accountQuery($conn, 'SELECT profile_photo IS NOT NULL AS has_photo FROM users WHERE id=?', 'i', $userId);
+    $hasPhoto = (bool)$stmt->get_result()->fetch_assoc()['has_photo']; $stmt->close();
 }
-$avatarText = strtoupper(substr($displayName, 0, 2));
-
-// Gets user session role
-$userRoleSession = strtolower(trim($_SESSION["user_role"] ?? $_SESSION["role"] ?? "user"));
-$isAdmin = ($userRoleSession === "admin");
-$displayRole = $isAdmin ? "Admin Staff" : "User";
-
-function settingsEscape($value) {
-    return htmlspecialchars((string)$value, ENT_QUOTES, "UTF-8");
+if (isset($_GET['photo'])) {
+    if (!$hasPhoto) { http_response_code(404); exit; }
+    $stmt = accountQuery($conn, 'SELECT profile_photo, profile_photo_mime FROM users WHERE id=?', 'i', $userId);
+    $photo = $stmt->get_result()->fetch_assoc(); $stmt->close();
+    if (!in_array($photo['profile_photo_mime'], ['image/jpeg','image/png','image/webp'], true)) { http_response_code(404); exit; }
+    header('Content-Type: '.$photo['profile_photo_mime']); header('X-Content-Type-Options: nosniff'); header('Cache-Control: private, no-store'); echo $photo['profile_photo']; exit;
 }
+$_SESSION['account_csrf'] ??= bin2hex(random_bytes(32));
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = accountInput('action'); $transaction = false;
+    try {
+        if (!hash_equals($_SESSION['account_csrf'], accountInput('csrf'))) throw new DomainException('Your session has expired. Please try again.');
+        if ($action === 'personal') {
+            $name = accountInput('full_name'); $email = accountInput('email'); $phone = accountInput('phone');
+            if ($name === '' || accountLength($name) > 100) throw new DomainException('Enter a full name of up to 100 characters.');
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email)>150) throw new DomainException('Enter a valid email address.');
+            if ($phone !== '' && (strlen($phone)>30 || !preg_match('/^[0-9+().\-\s]+$/D', $phone))) throw new DomainException('Enter a valid phone number of up to 30 characters.');
+            $changedEmail = $email !== $account['email'];
+            if ($changedEmail && !password_verify(accountPassword('current_password'), $account['password'])) throw new DomainException('Enter your current password to change your email.');
+            $conn->begin_transaction(); $transaction = true;
+            $stmt = accountQuery($conn, 'UPDATE users SET full_name=?, email=?, phone=? WHERE id=?', 'sssi', $name, $email, $phone, $userId); $stmt->close();
+            if ($changedEmail) { $stmt = accountQuery($conn, 'UPDATE password_resets SET used_at=UTC_TIMESTAMP() WHERE user_id=? AND used_at IS NULL', 'i', $userId); $stmt->close(); }
+            $conn->commit(); $transaction = false;
+            $_SESSION['user_name'] = $_SESSION['full_name'] = $name;
+            $_SESSION['user_email'] = $_SESSION['email'] = $email;
+            $message = 'Personal information updated.';
+        } elseif ($action === 'address') {
+            $country = accountInput('country'); $city = accountInput('city'); $postal = accountInput('postal_code');
+            if (accountLength($country)>100 || accountLength($city)>100 || accountLength($postal)>20) throw new DomainException('Address fields exceed the allowed length.');
+            $stmt = accountQuery($conn, 'UPDATE users SET country=?, city=?, postal_code=? WHERE id=?', 'sssi', $country, $city, $postal, $userId); $stmt->close();
+            $message = 'Address updated.';
+        } elseif ($action === 'password') {
+            $current = accountPassword('current_password'); $new = accountPassword('new_password'); $confirm = accountPassword('confirm_password');
+            if (!password_verify($current, $account['password'])) throw new DomainException('Current password is incorrect.');
+            if (strlen($new)<8 || strlen($new)>72 || strpos($new, "\0") !== false) throw new DomainException('Use a password of 8 to 72 bytes.');
+            if ($new !== $confirm) throw new DomainException('New passwords do not match.');
+            if (password_verify($new, $account['password'])) throw new DomainException('Choose a different new password.');
+            $hash = password_hash($new, PASSWORD_DEFAULT);
+            $conn->begin_transaction(); $transaction = true;
+            $stmt = accountQuery($conn, 'UPDATE users SET password=? WHERE id=? AND password=?', 'sis', $hash, $userId, $account['password']);
+            if ($stmt->affected_rows !== 1) { $stmt->close(); throw new DomainException('Password changed elsewhere. Please try again.'); } $stmt->close();
+            $stmt = accountQuery($conn, 'UPDATE password_resets SET used_at=UTC_TIMESTAMP() WHERE user_id=? AND used_at IS NULL', 'i', $userId); $stmt->close();
+            $conn->commit(); $transaction = false; session_regenerate_id(true); $_SESSION['account_csrf'] = bin2hex(random_bytes(32));
+            $message = 'Password changed successfully.';
+        } elseif ($action === 'photo' || $action === 'remove_photo') {
+            if (!$photoEnabled) throw new DomainException('Install the optional profile photo migration first.');
+            if ($action === 'remove_photo') {
+                $stmt = accountQuery($conn, 'UPDATE users SET profile_photo=NULL, profile_photo_mime=NULL WHERE id=?', 'i', $userId); $stmt->close(); $message = 'Profile photo removed.';
+            } else {
+                $file = $_FILES['profile_photo'] ?? null;
+                if (!$file || $file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name']) || $file['size'] > 2*1024*1024) throw new DomainException('Choose a valid image up to 2 MB.');
+                $info = @getimagesize($file['tmp_name']);
+                $mime = (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']);
+                if (!$info || $info['mime'] !== $mime || !in_array($mime, ['image/jpeg','image/png','image/webp'], true) || $info[0]>4096 || $info[1]>4096) throw new DomainException('Use a JPG, PNG or WebP image up to 4096 × 4096 pixels.');
+                $bytes = file_get_contents($file['tmp_name']);
+                $stmt = accountQuery($conn, 'UPDATE users SET profile_photo=?, profile_photo_mime=? WHERE id=?', 'ssi', $bytes, $mime, $userId); $stmt->close(); $message = 'Profile photo updated.';
+            }
+        } else { throw new DomainException('Unknown account action.'); }
+        $_SESSION['account_flash'] = ['success', $message];
+    } catch (Throwable $e) {
+        if ($transaction) $conn->rollback();
+        if (!($e instanceof DomainException)) error_log('Account update: '.$e->getMessage());
+        $message = $e instanceof DomainException ? $e->getMessage() : ($e->getCode() === 1062 ? 'This email address is already in use.' : 'Unable to save changes. Please try again.');
+        $_SESSION['account_flash'] = ['error', $message];
+    }
+    header('Location: settings.php', true, 303); exit;
+}
+$flash = $_SESSION['account_flash'] ?? null; unset($_SESSION['account_flash']);
+$displayName = $account['full_name'];
+$parts = preg_split('/\s+/u', trim($displayName), -1, PREG_SPLIT_NO_EMPTY);
+$first = function($s) { return function_exists('mb_substr') ? mb_substr($s,0,1,'UTF-8') : (preg_match('/^./us',$s,$m)?$m[0]:''); };
+$avatarText = strtoupper($first($parts[0] ?? 'U').(count($parts)>1?$first(end($parts)):''));
+$isAdmin = $account['role'] === 'admin'; $displayRole = $isAdmin ? 'Admin Staff' : 'User';
+$_SESSION['user_name'] = $_SESSION['full_name'] = $displayName;
+$_SESSION['user_email'] = $_SESSION['email'] = $account['email'];
+// Do not change the login portal's role/session policy here.
+function accountValue($v) { return settingsEscape(trim((string)$v) === '' ? 'Not provided' : $v); }
+function accountCsrf() { echo '<input type="hidden" name="csrf" value="'.settingsEscape($_SESSION['account_csrf']).'">'; }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -360,6 +434,22 @@ function settingsEscape($value) {
       .content-area { flex-direction: column; }
       .settings-subsidebar { width: 100%; align-self: auto; display: flex; overflow-x: auto; }
     }
+  
+    .account-dialog { border: 0; border-radius: 12px; padding: 24px; width: min(480px, calc(100% - 32px)); margin: auto; color: #1e293b; box-shadow: 0 12px 40px #0003; }
+    .account-dialog::backdrop { background: #0006; }
+    .account-dialog h3 { margin-bottom: 16px; font-size: 1.15rem; }
+    .account-dialog label { display:block; font-size: .8rem; margin: 10px 0 4px; }
+    .account-dialog input:not([type=hidden]) { width:100%; border:1px solid #d8dee5; border-radius:8px; padding:9px 11px; font-size:.85rem; }
+    .account-dialog input:focus { outline:2px solid #319795; outline-offset:1px; }
+    .account-dialog p { font-size:.75rem; color:#64748b; margin-top:8px; }
+    .account-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; flex-wrap:wrap; }
+    .account-flash { padding:12px 16px; border-radius:8px; margin-bottom:16px; font-size:.85rem; }
+    .account-flash.success { background:#dff3ed; color:#17604e; }
+    .account-flash.error { background:#fce5e5; color:#9b2525; }
+    .big-avatar img,.profile-avatar img { width:100%; height:100%; border-radius:50%; object-fit:cover; }
+    .avatar-camera-badge { cursor:pointer; }
+    .info-group span { overflow-wrap:anywhere; }
+    @media(max-width:540px) { .info-grid { grid-template-columns:1fr; } .settings-card { padding:16px; } .card-title-row { gap:8px; flex-wrap:wrap; } }
   </style>
 </head>
 <body>
@@ -386,7 +476,7 @@ function settingsEscape($value) {
         </button>
         <div class="user-profile">
           <div class="profile-avatar">
-            <?php echo settingsEscape($avatarText); ?>
+            <?php if ($hasPhoto): ?><img src="settings.php?photo=1" alt="Profile photo"><?php else: ?><?= settingsEscape($avatarText) ?><?php endif; ?>
           </div>
           <div class="profile-info">
             <span class="user-name">
@@ -453,23 +543,24 @@ function settingsEscape($value) {
         <div class="settings-main">
           <h1 class="page-title">Settings</h1>
           <p class="page-subtitle">Manage your account, preferences, and system configurations.</p>
+          <?php if ($flash): ?><div role="status" class="account-flash <?= settingsEscape($flash[0]) ?>"><?= settingsEscape($flash[1]) ?></div><?php endif; ?>
           <!-- Account Information Card -->
           <div class="settings-card">
             <div class="card-title-row">
               <h3>Account Information</h3>
-              <button class="btn-change-pass">🔒 Change Password</button>
+              <button type="button" class="btn-change-pass" data-account-dialog="passwordDialog">🔒 Change Password</button>
             </div>
             <p class="card-desc">View and update your personal information.</p>
             
             <div class="profile-display-row">
               <div class="big-avatar">
-                <?php echo settingsEscape($avatarText); ?>
-                <div class="avatar-camera-badge">📷</div>
+                <?php if ($hasPhoto): ?><img src="settings.php?photo=1" alt="Profile photo"><?php else: ?><?= settingsEscape($avatarText) ?><?php endif; ?>
+                <?php if ($photoEnabled): ?><button type="button" class="avatar-camera-badge" data-account-dialog="photoDialog" aria-label="Change profile photo">📷</button><?php endif; ?>
               </div>
               <div class="profile-user-details">
                 <h4><?php echo settingsEscape($displayName); ?></h4>
                 <p><?php echo settingsEscape($displayRole); ?></p>
-                <p style="font-size: 0.7rem; color: #94a3b8;">Party Hub, Langkaan Branch</p>
+                <p style="font-size: 0.7rem; color: #94a3b8;"><?= settingsEscape($account['email']) ?></p>
               </div>
             </div>
           </div>
@@ -477,24 +568,21 @@ function settingsEscape($value) {
           <div class="settings-card">
             <div class="card-title-row">
               <h3>Personal Information</h3>
-              <button class="btn-edit">✏️ Edit</button>
+              <button type="button" class="btn-edit" data-account-dialog="personalDialog">✏️ Edit</button>
             </div>
             <div class="info-grid">
               <div class="info-group" style="margin-bottom: 12px;">
-                <label>First Name</label>
-                <span>Jana Lei</span>
+                <label>Full Name</label>
+                <span><?= accountValue($account['full_name']) ?></span>
               </div>
-              <div class="info-group" style="margin-bottom: 12px;">
-                <label>Last Name</label>
-                <span>Lumbreras</span>
-              </div>
+
               <div class="info-group">
                 <label>Email Address</label>
-                <span>jvlumbreras@pcu.edu.ph</span>
+                <span><?= accountValue($account['email']) ?></span>
               </div>
               <div class="info-group">
                 <label>Phone</label>
-                <span>+63 976 244 6741</span>
+                <span><?= accountValue($account['phone']) ?></span>
               </div>
             </div>
           </div>
@@ -502,20 +590,20 @@ function settingsEscape($value) {
           <div class="settings-card">
             <div class="card-title-row">
               <h3>Address</h3>
-              <button class="btn-edit">✏️ Edit</button>
+              <button type="button" class="btn-edit" data-account-dialog="addressDialog">✏️ Edit</button>
             </div>
             <div class="info-grid">
               <div class="info-group" style="margin-bottom: 12px;">
                 <label>Country</label>
-                <span>Philippines</span>
+                <span><?= accountValue($account['country']) ?></span>
               </div>
               <div class="info-group" style="margin-bottom: 12px;">
                 <label>City/State</label>
-                <span>Dasmariñas</span>
+                <span><?= accountValue($account['city']) ?></span>
               </div>
               <div class="info-group">
                 <label>Postal Code</label>
-                <span>4114</span>
+                <span><?= accountValue($account['postal_code']) ?></span>
               </div>
             </div>
           </div>
@@ -523,6 +611,7 @@ function settingsEscape($value) {
       </main>
     </div>
   </div>
+<?php require __DIR__.'/account_dialogs.php'; ?>
 <?php require __DIR__.'/notification_panel.php'; ?>
 </body>
 </html>
