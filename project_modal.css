@@ -1,22 +1,29 @@
-/* Terms and Conditions alignment */
+/* Scoped to the Projects wizard; Poppins is inherited from projects.php. */
+.db-modal{position:fixed;inset:0;margin:auto;width:min(690px,calc(100% - 32px));max-height:92vh;overflow:auto;padding:28px;border:0;border-radius:14px;background:#fff;color:#202c3d;font:inherit;box-shadow:0 12px 40px #0002}
+.db-modal::backdrop{background:#000b}.db-modal .db-header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:24px}.db-header h2{font-size:25px;font-weight:500}.db-header button{border:0;background:none;font-size:25px;color:#666;cursor:pointer}.db-modal h3{font-size:16px;font-weight:500;margin-bottom:12px}.db-modal button,.db-modal input,.db-modal select,.db-modal textarea{font-family:inherit}.db-modal button{cursor:pointer}.db-modal button:disabled{opacity:.5;cursor:not-allowed}
+.db-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px 18px}.db-full{grid-column:1/-1}.db-field{display:flex;flex-direction:column;gap:6px;min-width:0;font-size:12px}.db-field label{font-size:12px}.db-input{width:100%;min-width:0;border:1px solid #dedede;border-radius:8px;padding:7px 10px;background:white;color:#202c3d;font-size:12px;min-height:34px}.db-input:focus{outline:2px solid #91d3d1;outline-offset:1px}.db-input::placeholder{color:#aaa}.db-modal textarea{resize:vertical;min-height:62px}.db-optional{font-size:11px;color:#999;font-style:italic}.db-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:25px}.db-outline,.db-next,.db-save{border:1px solid #dedede;border-radius:8px;padding:8px 18px;font-size:12px;background:#fff;color:#202c3d}.db-next{background:#91d3d1;border-color:#91d3d1}.db-save{background:#122b49;border-color:#122b49;color:#fff}.db-modal hr{border:0;border-top:1px solid #dedede;margin:20px 0}.db-list{display:grid;gap:8px}.db-choice{display:flex;align-items:flex-start;gap:9px;font-size:12px;line-height:1.5;cursor:pointer}.db-modal input[type=checkbox]{appearance:none;width:19px;height:19px;flex:0 0 19px;border:1px solid #d9d9d9;border-radius:5px;background:#fff;display:inline-grid;place-content:center;cursor:pointer}.db-modal input[type=checkbox]:checked{background:#91d3d1;border-color:#91d3d1}.db-modal input[type=checkbox]:checked::after{content:"";width:5px;height:9px;border:solid #122b49;border-width:0 2px 2px 0;transform:rotate(45deg)}.db-modal input[type=radio]{width:18px;height:18px;flex:0 0 18px;accent-color:#91d3d1}.db-modal :focus-visible{outline:2px solid #122b49;outline-offset:2px}
+.db-menu-head,.db-menu-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr) 85px 20px;gap:8px;align-items:start;margin:8px 0;font-size:12px}.db-qty{display:flex;align-items:center;border:1px solid #dedede;border-radius:8px;min-height:34px;overflow:hidden}.db-qty button{background:#fff;border:0;padding:5px;color:#555}.db-qty input{min-width:0;width:100%;text-align:center;border:0;font-size:12px;appearance:textfield}.db-qty input::-webkit-inner-spin-button,.db-qty input::-webkit-outer-spin-button{appearance:none;margin:0}.db-remove,.db-textbutton{border:0;background:none;color:#687880;font-size:12px;padding:5px;cursor:pointer}.db-textbutton{text-decoration:underline}.db-alt{border:1px solid #dedede;border-radius:8px;padding:4px;min-height:34px;display:flex;flex-wrap:wrap;gap:4px;align-items:center}.db-tag{display:inline-flex;align-items:center;gap:4px;border-radius:6px;background:#e4b6fa;color:#33243f;padding:3px 6px;font-size:11px}.db-tag button{border:0;background:none;color:#694b7b;font-size:14px}.db-alt details{width:100%;position:relative}.db-alt summary{cursor:pointer;color:#777;font-size:11px;padding:3px;list-style:none}.db-alt-options{padding:8px;display:grid;gap:6px;background:#fff;border:1px solid #dedede;border-radius:8px;max-height:180px;overflow:auto}.db-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 18px;font-size:12px;line-height:1.5;overflow-wrap:anywhere}.db-summary strong{font-weight:500}.db-line{font-size:12px;margin:5px 0;overflow-wrap:anywhere}.db-total{display:flex;gap:10px;align-items:center;margin:18px 0;font-size:12px}.db-total input{max-width:190px}.db-terms{font-size:12px;line-height:1.5}.db-terms p{margin:6px 0}.db-terms h3{margin-top:20px}.db-terms span{color:red}.db-terms ol,.db-terms ul{padding-left:22px}.db-view-link{background:none;border:0;text-align:left}.db-view-link:hover{text-decoration:underline}.project-row[data-project-id]{cursor:pointer}#dbError{color:#a52b2b;background:#fff0f0;border-radius:8px;padding:10px;margin-top:15px;font-size:12px}.db-modal [hidden]{display:none!important}
+@media(max-width:560px){.db-modal{padding:20px}.db-grid,.db-summary{grid-template-columns:1fr}.db-full{grid-column:auto}.db-menu-head{display:none}.db-menu-row{grid-template-columns:minmax(0,1fr) 85px 20px}.db-menu-row .db-alt{grid-column:1/-1;grid-row:2}.db-header h2{font-size:21px}}
+.db-modal .db-rental-row{display:grid;grid-template-columns:minmax(0,1fr) 110px 24px;gap:10px;align-items:center;margin:8px 0;font-size:12px}.db-rental-summary{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(0,1fr) minmax(0,1fr);gap:8px 12px;font-size:12px;overflow-wrap:anywhere}.db-rental-totals{text-align:right;margin-top:20px;font-size:13px;line-height:1.8}.db-rental-totals strong{margin-left:12px}.db-rental-group h3{margin-top:8px}.db-rental-row .db-qty button{min-width:24px}.db-rental-row .db-remove{font-size:18px}
+
+.db-rental-terms{font-size:12px;line-height:1.5;color:#202c3d}.db-rental-terms section{margin:0 0 16px}.db-rental-terms h3{font-weight:600;margin:0 0 4px;font-size:13px}.db-rental-terms p{margin:0 0 3px}#dbTerms:has(#dbRentalTerms:not([hidden])) .db-header h2{font-size:19px;text-align:center;flex:1;text-transform:uppercase;color:#122b49}
+
+/* Align the acceptance checkbox, label and link in both quotation types. */
 .db-modal .db-choice:has(> #dbAccepted) {
     align-items: center;
     gap: 8px;
     line-height: 1.5;
 }
-
 .db-modal .db-choice > #dbAccepted {
     margin: 0;
     flex-shrink: 0;
 }
-
 .db-modal .db-choice:has(> #dbAccepted) > span {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 4px;
 }
-
 .db-modal .db-choice:has(> #dbAccepted) label,
 .db-modal .db-choice:has(> #dbAccepted) .db-textbutton {
     margin: 0;
