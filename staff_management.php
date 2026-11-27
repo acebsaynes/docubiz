@@ -309,41 +309,20 @@ body {
 .profile-info { display: flex; flex-direction: column; line-height: 1.2; }
 .user-name { font-size: .82rem; font-weight: 500; color: #fff; }
 .user-role { font-size: .72rem; color: #9bb3d1; }
-
-/* Sidebar */
-.main-body { display: flex; flex: 1; min-height: calc(100vh - 60px); }
+.logout-link { color: #fff; text-decoration: none; font-size: .8rem; opacity: .9; white-space: nowrap; }
+.logout-link:hover { opacity: 1; text-decoration: underline; }
+.main-body { display: flex; flex: 1; }
 .sidebar {
-    width: 210px;
-    flex-shrink: 0;
-    background: #122b49;
-    padding-top: 15px;
+    width: 210px; flex-shrink: 0; background: #122b49; padding-top: 15px;
     border-top: 1px solid rgba(255,255,255,.08);
-    display: flex;
-    flex-direction: column;
 }
-.sidebar-menu {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: calc(100vh - 75px);
-}
+.sidebar-menu { display: flex; flex-direction: column; }
 .menu-item {
     display: flex; align-items: center; gap: 12px; padding: 12px 20px;
     color: #b0c4de; text-decoration: none; font-size: .88rem; transition: all .2s ease;
 }
 .menu-item:hover { color: #fff; background: rgba(255,255,255,.05); }
 .menu-item.active { color: #fff; background: #274b73; }
-
-.sidebar-logout {
-    margin-top: auto;
-    color: #fff !important;
-    text-decoration: none !important;
-}
-.sidebar-logout:hover {
-    color: #fff !important;
-    background: rgba(255,255,255,.08);
-}
-
 .content-area { flex: 1; min-width: 0; padding: 30px 40px; background: #d5dad9; }
 .page-header { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 20px; }
 .page-title { font-size: 1.8rem; font-weight: 600; color: #2a343d; }
@@ -448,80 +427,6 @@ body {
     background: #e6fffa; color: #234e52; font-size: .85rem;
 }
 .table-empty { text-align: center; padding: 25px !important; color: #718096 !important; }
-
-/* Logout confirmation popup */
-.logout-modal {
-    position: fixed;
-    inset: 0;
-    background: rgba(18,43,73,.65);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2000;
-    padding: 15px;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity .25s, visibility .25s;
-}
-.logout-modal.show {
-    opacity: 1;
-    visibility: visible;
-}
-.logout-modal-content {
-    width: 100%;
-    max-width: 390px;
-    background: #fff;
-    border-radius: 14px;
-    padding: 28px 26px;
-    text-align: center;
-    box-shadow: 0 10px 30px rgba(0,0,0,.2);
-}
-.logout-modal-icon {
-    width: 58px;
-    height: 58px;
-    border-radius: 50%;
-    background: #e6fffa;
-    color: #319795;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 15px;
-}
-.logout-modal-content h2 {
-    font-size: 1.25rem;
-    color: #122b49;
-    margin-bottom: 8px;
-}
-.logout-modal-content p {
-    font-size: .86rem;
-    color: #718096;
-    line-height: 1.6;
-    margin-bottom: 22px;
-}
-.logout-modal-actions {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-}
-.logout-cancel, .logout-confirm {
-    border: 0;
-    border-radius: 8px;
-    padding: 9px 18px;
-    font-size: .84rem;
-    font-weight: 600;
-    cursor: pointer;
-}
-.logout-cancel {
-    background: #edf2f7;
-    color: #4a5568;
-}
-.logout-confirm {
-    background: #122b49;
-    color: #fff;
-}
-.logout-cancel:hover { background: #e2e8f0; }
-.logout-confirm:hover { background: #1d3d63; }
-
 @media (max-width: 1100px) {
     .content-area { padding: 25px 20px; }
     .search-bar { width: 250px; }
@@ -530,7 +435,6 @@ body {
 @media (max-width: 900px) {
     .sidebar { width: 60px; }
     .sidebar .menu-item span { display: none; }
-    .sidebar .menu-item { justify-content: center; padding: 12px 10px; }
     .search-bar { width: 200px; }
     .page-header { align-items: flex-start; flex-direction: column; }
 }
@@ -550,28 +454,16 @@ body {
     .modal-avatar-container { width: 65px; height: 65px; }
     .message-btn { position: static; margin-left: auto; }
     .form-grid, .modal-grid-info { grid-template-columns: 1fr; }
-
-    .logout-modal-actions {
-        flex-direction: column-reverse;
-    }
-    .logout-cancel, .logout-confirm {
-        width: 100%;
-    }
 }
 </style>
 </head>
 
 <body>
 <div class="app-layout">
-
 <header class="topbar">
     <div class="brand-container">
         <button class="hamburger-btn" type="button" aria-label="Menu">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="3" y1="12" x2="21" y2="12"/>
-                <line x1="3" y1="6" x2="21" y2="6"/>
-                <line x1="3" y1="18" x2="21" y2="18"/>
-            </svg>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
         <span class="brand-name">DocuBiz</span>
     </div>
@@ -579,28 +471,17 @@ body {
     <div class="search-bar">
         <input id="topSearch" type="text" placeholder="Search staff members..." aria-label="Search staff members">
         <button type="button" class="search-btn" id="searchButton" aria-label="Search">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <circle cx="11" cy="11" r="8"/>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </button>
     </div>
 
     <div class="topbar-actions">
         <a href="settings.php" class="icon-btn" title="Settings" aria-label="Settings">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="3"></circle>
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-.33-1.82A1.65 1.65 0 0 0 3 13h-.09A2 2 0 0 1 1 11a2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 7a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V1a2 2 0 0 1 2-1 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0l.06.06a2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V8a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-            </svg>
-        </a>
-
-        <button class="icon-btn" type="button" aria-label="Notifications">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-            </svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-.33-1.82A1.65 1.65 0 0 0 3 13h-.09A2 2 0 0 1 1 11a2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 7a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V1a2 2 0 0 1 2-1 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0l.06.06a2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V8a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+    </a>
+        <button data-notification-bell class="icon-btn" type="button" aria-label="Notifications">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         </button>
-
         <div class="user-profile">
             <div class="profile-avatar"><?= h($avatarInitials) ?></div>
             <div class="profile-info">
@@ -608,126 +489,38 @@ body {
                 <span class="user-role">Admin Staff</span>
             </div>
         </div>
+        <a href="logout.php" class="logout-link">Log Out</a>
     </div>
 </header>
 
 <div class="main-body">
-
 <aside class="sidebar">
 <nav class="sidebar-menu">
-
-    <a href="dashboard.php" class="menu-item">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="7" height="7"/>
-            <rect x="14" y="3" width="7" height="7"/>
-            <rect x="14" y="14" width="7" height="7"/>
-            <rect x="3" y="14" width="7" height="7"/>
-        </svg>
-        <span>Dashboard</span>
-    </a>
-
-    <a href="messages.php" class="menu-item">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
-        <span>Messages</span>
-    </a>
-
-    <a href="calendar.php" class="menu-item">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="18" height="18" rx="2"/>
-            <line x1="16" y1="2" x2="16" y2="6"/>
-            <line x1="8" y1="2" x2="8" y2="6"/>
-            <line x1="3" y1="10" x2="21" y2="10"/>
-        </svg>
-        <span>Calendar</span>
-    </a>
-
-    <a href="projects.php" class="menu-item">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-        </svg>
-        <span>Projects</span>
-    </a>
-
-    <a href="inventory.php" class="menu-item">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-        </svg>
-        <span>Inventory</span>
-    </a>
-
-    <a href="documents.php" class="menu-item">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-        </svg>
-        <span>Documents</span>
-    </a>
-
-    <a href="staff_management.php" class="menu-item active">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-        </svg>
-        <span>Staff Management</span>
-    </a>
-
-    <a href="finances.php" class="menu-item">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="1" x2="12" y2="23"/>
-            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-        </svg>
-        <span>Finances</span>
-    </a>
-
-    <!-- Logout at the bottom -->
-    <a href="#" class="menu-item sidebar-logout" id="logoutButton">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-            <polyline points="16 17 21 12 16 7"></polyline>
-            <line x1="21" y1="12" x2="9" y2="12"></line>
-        </svg>
-        <span>Log Out</span>
-    </a>
-
+    <a href="dashboard.php" class="menu-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Dashboard</span></a>
+    <a href="messages.php" class="menu-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Messages</span></a>
+    <a href="calendar.php" class="menu-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>Calendar</span></a>
+    <a href="projects.php" class="menu-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><span>Projects</span></a>
+    <a href="inventory.php" class="menu-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg><span>Inventory</span></a>
+    <a href="documents.php" class="menu-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Documents</span></a>
+    <a href="staff_management.php" class="menu-item active"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Staff Management</span></a>
+    <a href="finances.php" class="menu-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Finances</span></a>
 </nav>
 </aside>
 
 <main class="content-area">
-
 <div class="page-header">
     <h1 class="page-title">Staff Management</h1>
     <div class="action-buttons">
         <button class="btn-action" id="sortButton" type="button">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="4" y1="21" x2="4" y2="14"/>
-                <line x1="4" y1="10" x2="4" y2="3"/>
-                <line x1="12" y1="21" x2="12" y2="12"/>
-                <line x1="12" y1="8" x2="12" y2="3"/>
-                <line x1="20" y1="21" x2="20" y2="16"/>
-                <line x1="20" y1="12" x2="20" y2="3"/>
-                <line x1="1" y1="14" x2="7" y2="14"/>
-                <line x1="9" y1="8" x2="15" y2="8"/>
-                <line x1="17" y1="16" x2="23" y2="16"/>
-            </svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
             Sort
         </button>
-
         <button class="btn-action" id="filterButton" type="button">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-            </svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
             Filter
         </button>
-
         <button class="btn-add-staff" type="button" onclick="openAddModal()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="12" y1="5" x2="12" y2="19"/>
-                <line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Add Staff Member
         </button>
     </div>
@@ -738,7 +531,6 @@ body {
 <?php endif; ?>
 
 <div class="staff-table-card">
-
 <div style="display:none; margin-bottom:15px;" id="filterArea">
     <label for="departmentFilter" style="font-size:.82rem; margin-right:8px;">Department:</label>
     <select id="departmentFilter" style="padding:7px 10px; border:1px solid #cbd5e0; border-radius:8px; color:#2d3748;">
@@ -752,7 +544,6 @@ body {
 
 <form method="post" id="bulkDeleteForm" onsubmit="return confirm('Delete all selected staff records? This cannot be undone.');">
     <input type="hidden" name="action" value="delete_selected">
-
     <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
         <span id="selectionCount" style="font-size:.8rem; color:#718096;">Select staff members using the checkboxes.</span>
         <button class="form-btn delete" type="submit" id="bulkDeleteButton" style="display:none;">Delete Selected</button>
@@ -770,12 +561,10 @@ body {
             <th>Mobile</th>
         </tr>
         </thead>
-
         <tbody id="staffTableBody">
         <?php foreach ($staffList as $index => $staff):
             $initials = "";
             $parts = preg_split('/\s+/', trim($staff["full_name"]));
-
             if (count($parts) >= 2) {
                 $initials = strtoupper(
                     mb_substr($parts[0], 0, 1, "UTF-8") .
@@ -784,7 +573,6 @@ body {
             } else {
                 $initials = strtoupper(mb_substr($staff["full_name"], 0, 2, "UTF-8"));
             }
-
             $colors = ["#319795", "#2b6cb0", "#d69e2e", "#e53e3e", "#805ad5", "#dd6b20"];
             $color = $colors[$index % count($colors)];
         ?>
@@ -832,7 +620,6 @@ body {
 <div class="modal-overlay" id="staffModal">
     <div class="modal-card">
         <button class="modal-close-btn" type="button" onclick="closeModal()" aria-label="Close">&times;</button>
-
         <div class="modal-header-section">
             <div class="modal-avatar-container" id="detailAvatar">ST</div>
             <div class="modal-user-main-info">
@@ -842,9 +629,7 @@ body {
             </div>
             <button class="message-btn" type="button" onclick="messageStaff()">Message</button>
         </div>
-
         <hr class="modal-divider">
-
         <div class="modal-section-title">Contact Information</div>
         <div class="modal-grid-info">
             <div class="info-group"><label>Email Address</label><span id="modalEmail"></span></div>
@@ -852,17 +637,14 @@ body {
             <div class="info-group"><label>City/State</label><span>Dasmariñas</span></div>
             <div class="info-group"><label>Postal Code</label><span>4114</span></div>
         </div>
-
         <div class="modal-section-title">Employment Details</div>
         <div class="modal-grid-info">
             <div class="info-group"><label>Department</label><span id="modalDept"></span></div>
             <div class="info-group"><label>Office Branch</label><span id="modalBranch"></span></div>
             <div class="info-group" style="grid-column:span 2;"><label>Position</label><span id="modalRole"></span></div>
         </div>
-
         <div class="form-actions">
             <button type="button" class="form-btn save" onclick="openEditModal()">Edit Staff</button>
-
             <form method="post" id="deleteStaffForm" onsubmit="return confirm('Are you sure you want to delete this staff member? This cannot be undone.');">
                 <input type="hidden" name="action" value="delete">
                 <input type="hidden" name="id" id="deleteStaffId">
@@ -876,7 +658,6 @@ body {
 <div class="modal-overlay" id="staffFormModal">
     <div class="modal-card">
         <button class="modal-close-btn" type="button" onclick="closeFormModal()" aria-label="Close">&times;</button>
-
         <h2 id="formTitle" style="font-size:1.25rem; color:#2d3748; font-weight:600;">Add Staff Member</h2>
         <p style="font-size:.82rem; color:#718096; margin-top:5px;">Enter the staff member's information below.</p>
 
@@ -889,12 +670,10 @@ body {
                     <label for="formStaffNumber">ID Number</label>
                     <input type="text" name="staff_number" id="formStaffNumber" required maxlength="50">
                 </div>
-
                 <div class="form-group">
                     <label for="formFullName">Full Name</label>
                     <input type="text" name="full_name" id="formFullName" required maxlength="150">
                 </div>
-
                 <div class="form-group">
                     <label for="formDepartment">Department</label>
                     <input type="text" name="department" id="formDepartment" list="departmentOptions" required maxlength="100">
@@ -904,22 +683,18 @@ body {
                         <?php endforeach; ?>
                     </datalist>
                 </div>
-
                 <div class="form-group">
                     <label for="formPosition">Position</label>
                     <input type="text" name="position" id="formPosition" required maxlength="100">
                 </div>
-
                 <div class="form-group">
                     <label for="formEmail">Email Address</label>
                     <input type="email" name="email" id="formEmail" required maxlength="150">
                 </div>
-
                 <div class="form-group">
                     <label for="formPhone">Mobile Number</label>
                     <input type="text" name="phone" id="formPhone" required maxlength="30">
                 </div>
-
                 <div class="form-group" style="grid-column:1/-1;">
                     <label for="formBranch">Office Branch</label>
                     <input type="text" name="branch" id="formBranch" required maxlength="150">
@@ -931,36 +706,6 @@ body {
                 <button type="submit" class="form-btn save" id="saveStaffButton">Save Staff</button>
             </div>
         </form>
-    </div>
-</div>
-
-<!-- Logout Confirmation Modal -->
-<div class="logout-modal" id="logoutModal">
-    <div class="logout-modal-content">
-
-        <div class="logout-modal-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24"
-                 fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                <polyline points="16 17 21 12 16 7"></polyline>
-                <line x1="21" y1="12" x2="9" y2="12"></line>
-            </svg>
-        </div>
-
-        <h2>Log Out?</h2>
-        <p>Are you sure you want to log out of your DocuBiz account?</p>
-
-        <div class="logout-modal-actions">
-            <button type="button" class="logout-cancel" id="cancelLogout">
-                Cancel
-            </button>
-
-            <button type="button" class="logout-confirm" id="confirmLogout">
-                Yes, Log Out
-            </button>
-        </div>
-
     </div>
 </div>
 
@@ -1033,13 +778,11 @@ function renderPage() {
 
     if (visibleRows.length === 0) {
         let emptyRow = document.getElementById("emptyStaffRow");
-
         if (!emptyRow) {
             emptyRow = document.createElement("tr");
             emptyRow.id = "emptyStaffRow";
             emptyRow.innerHTML = '<td colspan="6" class="table-empty">No staff members found.</td>';
         }
-
         tableBody.appendChild(emptyRow);
     } else {
         const emptyRow = document.getElementById("emptyStaffRow");
@@ -1061,7 +804,6 @@ function renderPage() {
 
         link.addEventListener("click", event => {
             event.preventDefault();
-
             if (!disabled) {
                 currentPage = page;
                 renderPage();
@@ -1084,7 +826,6 @@ function renderPage() {
 
 function updateSelectionDisplay() {
     const checked = tableBody.querySelectorAll(".staff-checkbox:checked");
-
     selectionCount.textContent = checked.length
         ? checked.length + " staff member(s) selected."
         : "Select staff members using the checkboxes.";
@@ -1096,7 +837,7 @@ function updateSelectionDisplay() {
 
     selectAll.indeterminate = checked.length > 0 && !selectAll.checked;
 
-    allRows.forEach(row => {
+        allRows.forEach(row => {
         const checkbox = row.querySelector(".staff-checkbox");
         row.classList.toggle("row-selected", !!checkbox && checkbox.checked);
     });
@@ -1110,7 +851,6 @@ document.getElementById("sortButton").addEventListener("click", () => {
         const comparison = a.dataset.name.localeCompare(b.dataset.name);
         return sortAscending ? comparison : -comparison;
     });
-
     sortAscending = !sortAscending;
     currentPage = 1;
     renderPage();
@@ -1132,7 +872,6 @@ selectAll.addEventListener("change", () => {
     visibleRows.forEach(row => {
         row.querySelector(".staff-checkbox").checked = selectAll.checked;
     });
-
     updateSelectionDisplay();
 });
 
@@ -1149,7 +888,6 @@ bulkDeleteForm.addEventListener("submit", event => {
     });
 
     const checked = tableBody.querySelectorAll(".staff-checkbox:checked");
-
     if (!checked.length) {
         event.preventDefault();
         alert("Please select at least one staff member.");
@@ -1179,7 +917,6 @@ function openDetails(row) {
     document.getElementById("deleteStaffId").value = data.id;
 
     const parts = data.name.trim().split(/\s+/);
-
     const initials = parts.length > 1
         ? parts[0][0] + parts[parts.length - 1][0]
         : data.name.substring(0, 2);
@@ -1231,6 +968,11 @@ function messageStaff() {
     if (!currentStaffRow) return;
 
     const data = getRowData(currentStaffRow);
+
+    /*
+     * This opens the email app for the selected staff member.
+     * It does not create an in-app chat conversation.
+     */
     window.location.href = "mailto:" + encodeURIComponent(data.email);
 }
 
@@ -1249,39 +991,8 @@ document.addEventListener("keydown", event => {
     }
 });
 
-/* ---------- Logout confirmation ---------- */
-const logoutButton = document.getElementById("logoutButton");
-const logoutModal = document.getElementById("logoutModal");
-const cancelLogout = document.getElementById("cancelLogout");
-const confirmLogout = document.getElementById("confirmLogout");
-
-logoutButton.addEventListener("click", function(event) {
-    event.preventDefault();
-    logoutModal.classList.add("show");
-});
-
-cancelLogout.addEventListener("click", function() {
-    logoutModal.classList.remove("show");
-});
-
-confirmLogout.addEventListener("click", function() {
-    window.location.href = "logout.php";
-});
-
-logoutModal.addEventListener("click", function(event) {
-    if (event.target === logoutModal) {
-        logoutModal.classList.remove("show");
-    }
-});
-
-document.addEventListener("keydown", function(event) {
-    if (event.key === "Escape") {
-        logoutModal.classList.remove("show");
-    }
-});
-
 updateTable();
 </script>
-
+<?php require __DIR__.'/notification_panel.php'; ?>
 </body>
 </html>
